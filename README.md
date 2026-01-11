@@ -285,10 +285,6 @@ python manage.py test
 3. Push to the branch
 4. Create a Pull Request
 
-## License
-
-[Add your license here]
-
 ## Support
 
 For issues or questions, please contact the development team or open an issue in the repository.
