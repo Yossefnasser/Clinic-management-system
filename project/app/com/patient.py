@@ -9,13 +9,12 @@ from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from project.settings import CHAR_100
 from django.contrib.auth.decorators import login_required
-####################  Patient  #################3
-
+####################  Patient  #################
 
 @login_required
 def list_of_patient(request):
-
-    total_patients_count = Patient.objects.filter(deleted_date__isnull=True).count()
+    
+    total_patients_count = Patient.objects.filter(branch=request.user.branch, deleted_date__isnull=True).count()
     context = {
         'total_patients_count': total_patients_count
     }
@@ -32,7 +31,7 @@ def get_list_of_patients(request):
         page_number = (start // length) + 1
 
         # Add ordering to avoid pagination warning
-        queryset = Patient.objects.filter(deleted_date__isnull=True).order_by('id')
+        queryset = Patient.objects.filter(branch=request.user.branch, deleted_date__isnull=True).order_by('id')
         
         if search_value:
             queryset = queryset.filter(
@@ -85,12 +84,12 @@ def add_new_patient(request):
 
     if typeOfReq == 'edit':
         idOfObject      = get_id_of_object(request.GET.get('id'))
-        data_to_insert  = Patient.objects.get(id=idOfObject)
+        data_to_insert  = Patient.objects.filter(branch=request.user.branch, id=idOfObject).first()
     elif typeOfReq == 'new':
         data_to_insert = None
 
     all_specializations = Specialization.objects.filter(deleted_date__isnull=True)
-    all_doctors         = Doctor.objects.filter(deleted_date__isnull=True)
+    all_doctors         = Doctor.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
 
     context = {
         'all_specializations'   : all_specializations , 
@@ -103,11 +102,11 @@ def add_new_patient(request):
         name            = check_if_post_input_valid(request.POST['name'], CHAR_100)
         phone_number         = check_if_post_input_valid(request.POST['phone'], CHAR_100)
         if typeOfReq == 'edit':
-            if Patient.objects.filter(phone_number=phone_number).exclude(id=idOfObject).exists():
+            if Patient.objects.filter(branch=request.user.branch, phone_number=phone_number).exclude(id=idOfObject).exists():
                 messages.error(request, 'هذا الرقم مسجل مسبقاً لمريض آخر')
                 return redirect('/add-patient?new')
         else:
-            if Patient.objects.filter(phone_number=phone_number).exists():
+            if Patient.objects.filter(branch=request.user.branch, phone_number=phone_number).exists():
                 messages.error(request, 'هذا الرقم مسجل مسبقاً لمريض آخر')
                 return redirect('/add-patient?new')
             
@@ -120,7 +119,7 @@ def add_new_patient(request):
 
 
         if typeOfReq == 'edit':
-            patient_obj = Patient.objects.filter(id=idOfObject).first()
+            patient_obj = Patient.objects.filter(branch=request.user.branch, id=idOfObject).first()
             print(" ------------------------------------    patient_obj   ----------------------------" , patient_obj)
 
             patient_obj.name    = name
@@ -138,6 +137,7 @@ def add_new_patient(request):
                 phone_number = phone_number,
                 notes        = notes,
                 age          = age , 
+                branch       = request.user.branch,
                 gender       = gender ,
                 added_by     = added_by,
                 added_date   = added_date,
@@ -154,7 +154,7 @@ def add_new_patient(request):
 @login_required
 def patient_details(request):
     idOfObject      = get_id_of_object(request.GET.get('id'))
-    patient         = Patient.objects.filter(id=idOfObject).first()
+    patient         = Patient.objects.filter(branch=request.user.branch, id=idOfObject).first()
 
     if not patient:
         messages.error(request, 'المريض غير موجود أو تم حذفه.')
@@ -168,8 +168,8 @@ def patient_details(request):
 @login_required
 def delete_patient(request):
     patient_id      = request.POST['id']
-    delete(request, Patient, Q(id = patient_id))
-    appointments = Appointment.objects.filter(patient_id=patient_id, deleted_date__isnull=True)
+    delete(request, Patient, Q(branch=request.user.branch, id = patient_id))
+    appointments = Appointment.objects.filter(branch=request.user.branch, patient_id=patient_id, deleted_date__isnull=True)
     delete(request, Appointment, Q(id__in = appointments.values_list('id', flat=True)))
     allJson             = {"Result": "Fail"}
     allJson['Result']   = "Success"
@@ -202,7 +202,7 @@ def add_new_patient_ajax(request):
             age = None
 
 
-        if Patient.objects.filter(phone_number=phone).exists():
+        if Patient.objects.filter(branch=request.user.branch, phone_number=phone).exists():
             return JsonResponse({'success': False, 'errors': 'This phone number is already registered.'}, status=400)
 
 
@@ -212,6 +212,7 @@ def add_new_patient_ajax(request):
             age          = age,
             gender       = gender,
             notes        = notes,
+            branch       = request.user.branch,
             added_by     = request.user if request.user.is_authenticated else None,
             added_date   = timezone.now(),
             updated_by   = request.user if request.user.is_authenticated else None,
@@ -235,7 +236,7 @@ def check_if_patient_exists(request):
         if not phone_number:
             return JsonResponse({'exists': False})
         
-        query = Patient.objects.filter(phone_number=phone_number , deleted_date__isnull=True)
+        query = Patient.objects.filter(branch=request.user.branch, phone_number=phone_number , deleted_date__isnull=True)
         if patient_id:
             query = query.exclude(id=patient_id)
             
@@ -255,11 +256,11 @@ def check_if_patient_exists(request):
 @login_required
 def get_latest_appointments(request, patient_id):
     try:
-        patient = Patient.objects.get(id=patient_id, deleted_date__isnull=True)
+        patient = Patient.objects.get(branch=request.user.branch, id=patient_id, deleted_date__isnull=True)
     except Patient.DoesNotExist:
         return JsonResponse({'error': 'Patient not found'}, status=404)
 
-    appointments = Appointment.objects.filter(patient=patient).order_by('-date')
+    appointments = Appointment.objects.filter(branch=request.user.branch, patient=patient).order_by('-date')
     data = [appointment.tojson() for appointment in appointments]
     print(data)
     return JsonResponse({

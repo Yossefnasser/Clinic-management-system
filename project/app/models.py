@@ -1,6 +1,6 @@
 import datetime
 import time
-from django.db import models
+from django.db import models  
 from django.contrib.auth.models import AbstractUser
 from django.forms import ValidationError
 from django.utils import timezone
@@ -8,10 +8,14 @@ from django.utils import timezone
 from app.templatetags.helpers import get_id_hashed_of_object
 
 
+class Branch(models.Model):
+    """Clinic branch model"""
+    address     = models.TextField()
+    phone_number= models.CharField(max_length=15, blank=True, null=True)
+    is_active   = models.BooleanField(default=True)
 
-
-
-
+    def __str__(self):
+        return f"{self.address}"
 
 class User(AbstractUser):
     class UserType(models.TextChoices):
@@ -29,12 +33,11 @@ class User(AbstractUser):
     )
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     is_active = models.BooleanField(default=True)
-
+    branch    = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
     REQUIRED_FIELDS = ['fullname']  # for createsuperuser
 
     def __str__(self):
         return f"{self.fullname or self.username} ({self.get_user_type_display()})"
-
 
 class BaseModel(models.Model):
     added_date   = models.DateTimeField(default=timezone.now, null=True, blank=True)
@@ -46,7 +49,7 @@ class BaseModel(models.Model):
 
     class Meta:
         abstract = True
-        
+
 class Specialization(BaseModel):
     """Specialization model"""
     name = models.CharField(max_length=100, unique=True)
@@ -65,11 +68,15 @@ class Doctor(BaseModel):
     """Doctor information model"""
     full_name                = models.CharField(max_length=100)
     specialization           = models.ForeignKey(Specialization, on_delete=models.PROTECT, related_name="doctors")
-    phone_number             = models.CharField(unique=True,max_length=15, blank=True, null=True)
+    phone_number             = models.CharField(max_length=15, blank=True, null=True)
     email                    = models.EmailField( blank=True, null=True)
     examination_price        = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     consultation_price       = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     is_active                = models.BooleanField(default=True)
+    branch                  = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
+    
+    class Meta:
+        unique_together = [['phone_number', 'branch']]
     
     def to_json(self):
         return {
@@ -95,9 +102,11 @@ class Patient(BaseModel):
         ('FEMALE', 'Female'),
     ], blank=True, null=True)
     notes                = models.TextField(blank=True, null=True)
-
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
+    
     class Meta:
         db_table = "Patient"
+        unique_together = [['phone_number', 'branch']]
 
     def to_json(self):
         return {
@@ -121,7 +130,7 @@ class Clinic(BaseModel):
     default_close_time = models.TimeField(default=datetime.time(23, 0))
     slot_duration_hours = models.IntegerField(default=1)
     is_active       = models.BooleanField(default=True)
-
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
     def __str__(self):
         return  f'{self.name} ({self.default_open_time} - {self.default_close_time})'
 
@@ -147,7 +156,7 @@ class ClinicSlot(BaseModel):
             return ValidationError('Start time must be before end time. ')
         clinic_hours = self.clinic
         if not (clinic_hours.default_open_time <= self.start_time < self.end_time <= clinic_hours.default_close_time):
-            raise ValidationError(f"Clinic slot must be within clinic hours: {clinic_hours.open_time} - {clinic_hours.close_time}.")
+            raise ValidationError(f"Clinic slot must be within clinic hours: {clinic_hours.default_open_time} - {clinic_hours.default_close_time}.")
     def to_json(self, is_available=True, doctor_name=None):
         return {
             'id': self.id,
@@ -173,6 +182,7 @@ class DoctorSchedule(BaseModel):
     valid_from             = models.DateField(default=datetime.date.today)
     valid_to               = models.DateField(null=True, blank=True)
     is_active              = models.BooleanField(default=True)
+    branch                 = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
     
     class Meta:
         ordering = ['day_of_week']
@@ -214,8 +224,7 @@ class Appointment(BaseModel):
     date     = models.DateField()
     time     = models.TimeField()
     notes    = models.TextField(blank=True, null=True)
-
-
+    branch   = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
 
     class Meta:
         ordering = ['date', 'time']

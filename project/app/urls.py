@@ -1,6 +1,7 @@
 from django.urls import path, include
 
 from .com import auth, dashboard ,patient ,appointment,doctors,users
+from rest_framework.routers import DefaultRouter
 
 urlpatterns = [
     path('',            dashboard.dashboard, name='dashboard'),

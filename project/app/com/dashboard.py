@@ -23,13 +23,14 @@ def dashboard(request):
     end_of_previous_month = start_of_current_month - timedelta(days=1)
 
     # --- Patients ---
-    total_patients_count = Patient.objects.filter(deleted_date__isnull=True).count()
+    total_patients_count = Patient.objects.filter(branch=request.user.branch, deleted_date__isnull=True).count()
     patients_this_month = Patient.objects.filter(
         deleted_date__isnull=True,
         added_date__gte=start_of_current_month,
         added_date__lte=today
     ).count()
     patients_last_month = Patient.objects.filter(
+        branch=request.user.branch,
         deleted_date__isnull=True,
         added_date__gte=start_of_previous_month,
         added_date__lte=end_of_previous_month
@@ -43,28 +44,33 @@ def dashboard(request):
     start_of_week = today - timedelta(days=today.weekday())  # Monday as start
     end_of_week = start_of_week + timedelta(days=6)
     appointments_this_week = Appointment.objects.filter(
+        branch=request.user.branch,
         deleted_date__isnull=True,
         date__gte=start_of_week,
         date__lte=end_of_week
     ).count()
     appointments_today = Appointment.objects.filter(
+        branch=request.user.branch,
         deleted_date__isnull=True,
         date=today
     ).count()
 
     # --- Doctors ---
     active_doctors_count = Doctor.objects.filter(
+        branch=request.user.branch,
         deleted_date__isnull=True,
         is_active=True
     ).count()
 
     # --- Income ---
     total_income = Invoice.objects.filter(
+        appointment__branch=request.user.branch,
         deleted_date__isnull=True
     ).aggregate(Sum("total_price"))["total_price__sum"] or 0
 
     # This week income
     income_this_week = Invoice.objects.filter(
+        appointment__branch=request.user.branch,
         deleted_date__isnull=True,
         created_at__date__gte=start_of_week,
         created_at__date__lte=end_of_week
@@ -75,6 +81,7 @@ def dashboard(request):
     end_of_last_week = start_of_week - timedelta(days=1)
 
     income_last_week = Invoice.objects.filter(
+        appointment__branch=request.user.branch,
         deleted_date__isnull=True,
         created_at__date__gte=start_of_last_week,
         created_at__date__lte=end_of_last_week

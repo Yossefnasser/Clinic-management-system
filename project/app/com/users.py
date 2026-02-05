@@ -26,7 +26,7 @@ def get_list_of_users(request):
         page_number = (start // length) + 1
 
         # Filter active users only (not deleted)
-        queryset = User.objects.filter(is_active=True).order_by('id')
+        queryset = User.objects.filter(branch=request.user.branch, is_active=True).order_by('id')
         
         if search_value:
             queryset = queryset.filter(
@@ -82,7 +82,7 @@ def add_new_user(request):
 
     if typeOfReq == 'edit':
         idOfObject = get_id_of_object(request.GET.get('id'))
-        data_to_insert = User.objects.get(id=idOfObject)
+        data_to_insert = User.objects.filter(branch=request.user.branch, id=idOfObject).first()
     elif typeOfReq == 'new':
         data_to_insert = None
 
@@ -101,7 +101,7 @@ def add_new_user(request):
         password = request.POST.get('password', '').strip()
 
         if typeOfReq == 'edit':
-            user_obj = User.objects.filter(id=idOfObject).first()
+            user_obj = User.objects.filter(branch=request.user.branch, id=idOfObject).first()
             
             user_obj.fullname = fullname
             user_obj.username = username
@@ -128,6 +128,7 @@ def add_new_user(request):
                 phone_number=phone_number,
                 user_type=user_type,
                 is_active=is_active,
+                branch=request.user.branch,
                 password=make_password(password)
             )
             data_to_insert.save()
@@ -143,7 +144,7 @@ def delete_user(request):
     user_id = request.POST['id']
     
     # Soft delete by setting is_active to False instead of actual deletion
-    user = User.objects.filter(id=user_id).first()
+    user = User.objects.filter(branch=request.user.branch, id=user_id).first()
     if user:
         user.is_active = False
         user.save()
@@ -154,7 +155,7 @@ def delete_user(request):
 @login_required
 def user_details(request):
     idOfObject = get_id_of_object(request.GET.get('id'))
-    user = User.objects.get(id=idOfObject)
+    user = User.objects.filter(branch=request.user.branch, id=idOfObject).first()
 
     context = {
         "user": user,
@@ -170,7 +171,7 @@ def check_if_username_exists(request):
         if not username:
             return JsonResponse({'exists': False})
         
-        query = User.objects.filter(username=username)
+        query = User.objects.filter(branch=request.user.branch, username=username)
         if user_id:
             query = query.exclude(id=user_id)
             

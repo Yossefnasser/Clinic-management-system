@@ -17,8 +17,8 @@ from django.contrib.auth.decorators import login_required
 @login_required
 def list_of_appointments(request):
     days_of_week = DaysOfWeek.objects.filter(deleted_date__isnull=True)
-    clinics = Clinic.objects.filter(deleted_date__isnull=True)
-    schedules_data = DoctorSchedule.objects.filter(deleted_date__isnull=True)
+    clinics = Clinic.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
+    schedules_data = DoctorSchedule.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
     specializations = Specialization.objects.filter(deleted_date__isnull=True)
     context = {
         'clinics'             : clinics,
@@ -40,6 +40,7 @@ def get_clinic_time_slots(request,clinic_id):
 @login_required
 def get_clinic_schedule(request,clinic_id):
     clinic_schedules = DoctorSchedule.objects.filter(
+    branch=request.user.branch,
     clinic_id=clinic_id,
     deleted_date__isnull=True
 )
@@ -73,13 +74,13 @@ def new_appointment(request):
 
     if typeOfReq == 'edit':
         idOfObject      = get_id_of_object(request.GET.get('id'))
-        data_to_insert  = Appointment.objects.get(id=idOfObject)
+        data_to_insert  = Appointment.objects.filter(branch=request.user.branch, id=idOfObject).first()
     elif typeOfReq == 'new':
         data_to_insert = None
 
     # Load needed data for form
-    doctors = Doctor.objects.filter(deleted_date__isnull=True)
-    clinics = Clinic.objects.filter(deleted_date__isnull=True)
+    doctors = Doctor.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
+    clinics = Clinic.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
     all_specializations = Specialization.objects.filter(deleted_date__isnull=True)
 
     context = {
@@ -92,7 +93,7 @@ def new_appointment(request):
 
     if request.method == 'POST':
         patient_id = request.POST.get('patient')
-        if not patient_id or not Patient.objects.filter(id=patient_id).exists():
+        if not patient_id or not Patient.objects.filter(branch=request.user.branch, id=patient_id).exists():
             messages.error(request, 'يرجى اختيار مريض صحيح')
             return redirect('/new-appointment?new')
     
@@ -101,9 +102,9 @@ def new_appointment(request):
         clinic_id  = request.POST.get('clinic')
         status     = request.POST.get('status', 'OPEN')
         status_obj = Status.objects.get(name=status)
-        patient_obj = Patient.objects.get(id=patient_id)
-        doctor_obj  = Doctor.objects.get(id=doctor_id)
-        clinic_obj  = Clinic.objects.get(id=clinic_id)
+        patient_obj = Patient.objects.filter(branch=request.user.branch, id=patient_id).first()
+        doctor_obj  = Doctor.objects.filter(branch=request.user.branch, id=doctor_id).first()
+        clinic_obj  = Clinic.objects.filter(branch=request.user.branch, id=clinic_id).first()
 
         date_str = request.POST.get('date')
         time_str = request.POST.get('time')
@@ -117,7 +118,7 @@ def new_appointment(request):
         notes = request.POST.get('notes', '')
 
         if typeOfReq == 'edit':
-            appointment = Appointment.objects.filter(id=idOfObject).first()
+            appointment = Appointment.objects.filter(branch=request.user.branch, id=idOfObject).first()
             if appointment:
                 appointment.patient = patient_obj
                 appointment.doctor = doctor_obj
@@ -126,6 +127,7 @@ def new_appointment(request):
                 appointment.date = date
                 appointment.time = time
                 appointment.notes = notes
+                appointment.branch = request.user.branch
                 appointment.updated_by = updated_by
                 appointment.updated_date = updated_date
                 appointment.save()
@@ -139,6 +141,7 @@ def new_appointment(request):
                 date=date,
                 time=time,
                 notes=notes,
+                branch=request.user.branch,
                 added_by=added_by,
                 added_date=added_date,
                 updated_by=updated_by,
@@ -182,9 +185,9 @@ def new_appointment_api(request):
                         start_time = datetime.strptime(start_str, "%I:%M %p").time()
                         end_time   = datetime.strptime(end_str, "%I:%M %p").time()
                 # status_obj = Status.objects.get(name=status)
-                patient_obj = Patient.objects.get(id=patient_id)
-                doctor_obj  = Doctor.objects.get(id=doctor_id)
-                clinic_obj  = Clinic.objects.filter(name=clinic_name).first() if clinic_name else None
+                patient_obj = Patient.objects.filter(branch=request.user.branch, id=patient_id).first()
+                doctor_obj  = Doctor.objects.filter(branch=request.user.branch, id=doctor_id).first()
+                clinic_obj  = Clinic.objects.filter(branch=request.user.branch, name=clinic_name).first() if clinic_name else None
 
                 # clinic_obj  = doctor_schedule.clinic if doctor_schedule.exists() else None
             except Exception as e:
@@ -204,6 +207,7 @@ def new_appointment_api(request):
                     service_price=service_price,
                     time=start_time,
                     notes=notes,
+                    branch=request.user.branch,
                     added_by=cur_user,
                     added_date=cur_date,
                     updated_by=cur_user,
@@ -225,6 +229,7 @@ def api_get_doctors_by_specialization(request):
     print(f"-----------------{specialization_id}-----------------")
 
     doctors = Doctor.objects.filter(
+        branch=request.user.branch,
         specialization__id=specialization_id,
         deleted_date__isnull=True
     )
@@ -252,6 +257,7 @@ def get_doctor_schedule(request):
     print(f"Fetching schedule for doctor ID: {doctor_id} on {today} {today.weekday()}")
 
     schedules = DoctorSchedule.objects.filter(
+        branch=request.user.branch,
         doctor_id=doctor_id,
         is_active=True,
         valid_from__lte=today,
