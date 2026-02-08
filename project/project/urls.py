@@ -20,6 +20,5 @@ from django.contrib import admin
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('app.urls')),
-    path('silk/', include('silk.urls', namespace='silk')),
 
 ]

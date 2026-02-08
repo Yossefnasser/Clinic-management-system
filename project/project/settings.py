@@ -40,7 +40,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'app',
     'whitenoise.runserver_nostatic',
-    'silk',
 ]
 
 MIDDLEWARE = [
@@ -52,7 +51,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    'silk.middleware.SilkyMiddleware',
 ]
 
 ROOT_URLCONF = 'project.urls'
