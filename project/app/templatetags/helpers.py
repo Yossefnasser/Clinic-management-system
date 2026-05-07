@@ -8,6 +8,8 @@ import re
 from project.settings import CHAR_05, CHAR_10, CHAR_15
 from django import template
 from datetime import datetime
+from django.utils import timezone
+from app.helpers import get_local_now
 register = template.Library()
 
 @register.filter
@@ -62,7 +64,7 @@ def get_id_of_object(hash_used):
 
 
 def delete(request, model_name, condition):
-    deleted_date            = dt.datetime.now()
+    deleted_date            = get_local_now()
     object                  = model_name.objects.filter(condition)
     _id                     = '_' + str(object[0].id)  + '_DELETED'
 

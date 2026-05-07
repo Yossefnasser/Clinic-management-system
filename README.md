@@ -1,299 +1,147 @@
 # Clinic Management System (CMS)
 
-A comprehensive Django-based clinic management system designed to streamline appointment scheduling, patient management, doctor profiles, and clinic operations.
+Clinic Management System is a Django 5.2 application for managing clinics with an Arabic RTL UI. It supports multi-branch operations, role-based users, doctors, patients, schedules, appointments, and revenue dashboards.
 
-## Features
+## Highlights
 
-- **User Management**: Role-based user system (Admin, Manager, Secretary)
-- **Doctor Management**: Create and manage doctor profiles with specializations and pricing
-- **Patient Management**: Store and manage patient information and medical history
-- **Appointment Scheduling**: Book and manage patient appointments with doctors
-- **Doctor Schedules**: Create and manage doctor availability and time slots
-- **Authentication**: Secure login system with JWT token support
-- **REST API**: Django REST Framework integration for API endpoints
-- **Admin Dashboard**: Comprehensive admin interface for system management
+- **RTL Arabic UI** built with Bootstrap 5 RTL, DataTables, and SweetAlert2.
+- **Role-based users** (Manager, Admin, Secretary).
+- **Doctors & patients** with branch-level separation.
+- **Clinics, slots, and schedules** for doctor availability.
+- **Appointments & invoices** with dashboard analytics.
+- **JSON endpoints** for AJAX-driven screens.
+- **Railway-ready** configuration with WhiteNoise + Gunicorn.
 
 ## Tech Stack
 
-- **Backend**: Django 5.2.4
-- **Database**: PostgreSQL (production) / SQLite (development)
-- **API**: Django REST Framework 3.16.0, Simple JWT 5.5.1
+- **Backend**: Django 5.2.4, Django REST Framework 3.16.0
+- **Database**: SQLite (local) / PostgreSQL via `DATABASE_PUBLIC_URL` (Railway)
+- **Frontend**: Bootstrap 5 RTL, DataTables, SweetAlert2, Font Awesome
+- **Static**: WhiteNoise 6.11.0
 - **Server**: Gunicorn 23.0.0
-- **ORM**: SQLAlchemy 2.0.41 (for migrations and data operations)
-- **Web Server**: WhiteNoise 6.11.0 (static file serving)
 
-## Project Structure
+## Project Layout
 
 ```
 project/
-├── app/                          # Main application
-│   ├── models.py                # Database models (User, Doctor, Patient, Appointment, etc.)
-│   ├── views.py                 # View functions and logic
-│   ├── urls.py                  # URL routing
-│   ├── admin.py                 # Django admin configuration
-│   ├── helpers.py               # Utility functions
-│   ├── com/                     # Communication/business logic modules
-│   │   ├── appointment.py
-│   │   ├── auth.py
-│   │   ├── dashboard.py
-│   │   ├── doctors.py
-│   │   ├── patient.py
-│   │   └── users.py
-│   ├── management/              # Custom Django commands
-│   │   └── commands/
-│   │       └── create_clinic_slots.py
-│   ├── migrations/              # Database migrations
-│   ├── templates/               # HTML templates
-│   └── templatetags/            # Custom template tags
-├── project/                     # Django project settings
+├── app/                          # Django app
+│   ├── com/                      # Feature modules (auth, dashboard, doctors, patient, appointment, users)
+│   ├── management/commands/      # Custom commands
+│   ├── migrations/
+│   ├── templates/                # HTML templates (RTL)
+│   ├── templatetags/
+│   ├── models.py
+│   ├── urls.py
+│   └── admin.py
+├── project/                      # Django settings
 │   ├── settings.py
 │   ├── urls.py
-│   ├── wsgi.py
-│   └── asgi.py
-└── db.sqlite3                  # SQLite database (development)
+│   └── wsgi.py
+├── static/                       # Project static assets
+├── staticfiles/                  # collectstatic output
+└── manage.py
 ```
 
-## Installation & Setup
+## Quick Start (Local)
 
-### Prerequisites
+1) Create and activate a virtual environment.
+2) Install dependencies.
+3) Run migrations and create a superuser.
+4) Start the server.
 
-- Python 3.8+
-- PostgreSQL (for production)
-- pip or conda package manager
+> Note: `manage.py` lives inside the project folder. Run commands from the project directory.
 
-### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-cd CMS
 ```
-
-### 2. Create Virtual Environment
-
-```bash
-python -m venv venv
-# On Windows
-venv\Scripts\activate
-# On macOS/Linux
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-DEBUG=True
-SECRET_KEY=your-secret-key-here
-DATABASE_URL=sqlite:///db.sqlite3
-ALLOWED_HOSTS=localhost,127.0.0.1
-```
-
-### 5. Run Migrations
-
-```bash
 cd project
 python manage.py migrate
-```
-
-### 6. Create Superuser
-
-```bash
 python manage.py createsuperuser
-```
-
-### 7. Run Development Server
-
-```bash
 python manage.py runserver
 ```
 
-The application will be available at `http://localhost:8000`
+Open: http://localhost:8000
 
-## Available Management Commands
+## Configuration Notes
 
-### Create Clinic Slots
+- **Database**: local uses SQLite by default. For Railway or other managed Postgres, set `DATABASE_PUBLIC_URL`.
+- **Security**: `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE` are enabled. For local HTTP development, set them to `False` in [project/settings.py](project/settings.py).
+- **Allowed hosts**: currently `['*']` in settings for development; restrict in production.
 
-Generate doctor appointment slots:
+## Required Seed Data
 
-```bash
-python manage.py create_clinic_slots
+Some screens expect initial records to exist:
+
+- **Branch**: create at least one branch.
+- **Status**: create `OPEN` and `Completed` (used in appointments and invoices).
+- **Days of Week**: add 7 records.
+- **Clinics** and **Specializations**: for schedules and appointments.
+
+Example (Django shell):
+
+```
+from app.models import Branch, Status, DaysOfWeek, Clinic, Specialization
+
+branch = Branch.objects.create(address="Main Branch")
+Status.objects.get_or_create(name="OPEN")
+Status.objects.get_or_create(name="Completed")
+for d in ["Saturday","Sunday","Monday","Tuesday","Wednesday","Thursday","Friday"]:
+    DaysOfWeek.objects.get_or_create(name=d)
+
+Specialization.objects.get_or_create(name="Cardiology")
+Clinic.objects.get_or_create(name="General Clinic", branch=branch)
 ```
 
-## Models Overview
+## Management Commands
 
-### User
-Extended Django User model with role-based access:
-- **User Types**: Manager, Admin, Secretary
-- Fields: fullname, phone_number, user_type, is_active
+- `create_clinic_slots`: regenerate 1-hour slots per clinic.
+- `set_default_branch`: set `branch_id=1` for existing records missing a branch.
 
-### Doctor
-Manages doctor information:
-- Full name, specialization, contact details
-- Pricing for consultations and examinations
-- Active/inactive status
+```
+cd project
+python manage.py create_clinic_slots
+python manage.py set_default_branch
+```
 
-### Patient
-Stores patient information:
-- Name, phone number, age, gender
-- Medical notes and history
+## JSON Endpoints (AJAX)
 
-### Appointment
-Manages patient appointments:
-- Links patients to doctors
-- Tracks appointment status and pricing
-- Records date/time and service type
+These routes return JSON for the UI (login required):
 
-### DoctorSchedule
-Manages doctor availability:
-- Working hours and days
-- Break times and time slots
+- `/api/time-slots/`
+- `/api/doctors/<doctor_id>/latest-appointments/`
+- `/api/patients/<patient_id>/latest-appointments/`
+- `/api/new-appointment`
+- `/api/clinics/<clinic_id>/time-slots/`
+- `/api/clinics/<clinic_id>/schedule/`
+- `/api/get-doctors-by-specialization`
+- `/api/get-doctor-schedule`
 
-### Specialization
-Categorizes doctors by medical specialty
+## Deployment (Procfile)
 
-## API Endpoints
-
-The system includes REST API endpoints for:
-- Authentication (JWT tokens)
-- User management
-- Doctor management
-- Patient management
-- Appointment booking
-- Schedule management
-
-## Database
-
-### Development
-SQLite database (`db.sqlite3`)
-
-### Production
-PostgreSQL with environment configuration via `DATABASE_URL`
-
-## Deployment
-
-### Using Procfile (Heroku/similar platforms)
-
-```bash
+```
 release: cd project && python manage.py migrate
 web: cd project && gunicorn project.wsgi:application --bind 0.0.0.0:8000
 ```
 
-### Environment Setup for Production
-
-Set these environment variables:
-- `DATABASE_URL`: PostgreSQL connection string
-- `DEBUG`: Set to False
-- `SECRET_KEY`: Strong random key
-- `ALLOWED_HOSTS`: Your domain names
-
 ## Static Files
 
-Run collectstatic to gather all static files:
-
-```bash
+```
 cd project
 python manage.py collectstatic
-```
-
-## Common Tasks
-
-### Creating a Clinic Specialization
-
-```python
-from app.models import Specialization
-
-Specialization.objects.create(name="Cardiology")
-```
-
-### Adding a Doctor
-
-```python
-from app.models import Doctor, Specialization
-
-spec = Specialization.objects.get(name="Cardiology")
-doctor = Doctor.objects.create(
-    full_name="Dr. John Doe",
-    specialization=spec,
-    phone_number="123-456-7890",
-    email="john@example.com",
-    examination_price=50.00,
-    consultation_price=30.00
-)
-```
-
-### Booking an Appointment
-
-```python
-from app.models import Appointment, Patient, Doctor
-
-patient = Patient.objects.get(pk=1)
-doctor = Doctor.objects.get(pk=1)
-appointment = Appointment.objects.create(
-    patient=patient,
-    doctor=doctor,
-    appointment_date="2026-01-15",
-    appointment_time="10:00"
-)
-```
-
-## Troubleshooting
-
-### Database Migration Issues
-
-Reset migrations (development only):
-```bash
-cd project
-python manage.py migrate app zero
-python manage.py migrate app
-```
-
-### Static Files Not Loading
-
-Ensure WhiteNoise is installed and configured:
-```bash
-pip install whitenoise
-python manage.py collectstatic
-```
-
-### Port Already in Use
-
-Run on a different port:
-```bash
-python manage.py runserver 8001
 ```
 
 ## Testing
 
-Run the test suite:
-
-```bash
+```
 cd project
 python manage.py test
 ```
 
 ## Contributing
 
-1. Create a feature branch
-2. Commit your changes
-3. Push to the branch
-4. Create a Pull Request
-
-## Support
-
-For issues or questions, please contact the development team or open an issue in the repository.
+1. Create a feature branch.
+2. Commit your changes.
+3. Push the branch and open a PR.
 
 ## Changelog
 
-### Version 1.0.0
-- Initial release
-- Core functionality for appointment scheduling
-- Doctor and patient management
-- User authentication
-- Admin dashboard
+### 1.0.0
+- Initial release: core scheduling, doctors, patients, and dashboard.

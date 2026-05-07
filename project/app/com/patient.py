@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from project.settings import CHAR_100
 from django.contrib.auth.decorators import login_required
+from app.helpers import get_local_now
 ####################  Patient  #################
 
 @login_required
@@ -77,8 +78,8 @@ def get_list_of_patients(request):
 def add_new_patient(request):
     
     added_by     = request.user
-    added_date   = datetime.now()
-    updated_date = datetime.now()
+    added_date   = get_local_now()
+    updated_date = get_local_now()
     updated_by   = request.user
     typeOfReq    = request.GET.get('type', 'new')
 
@@ -202,7 +203,7 @@ def add_new_patient_ajax(request):
             age = None
 
 
-        if Patient.objects.filter(branch=request.user.branch, phone_number=phone).exists():
+        if Patient.objects.filter(branch=request.user.branch, phone_number=phone, deleted_date__isnull=True).exists():
             return JsonResponse({'success': False, 'errors': 'This phone number is already registered.'}, status=400)
 
 
@@ -214,9 +215,9 @@ def add_new_patient_ajax(request):
             notes        = notes,
             branch       = request.user.branch,
             added_by     = request.user if request.user.is_authenticated else None,
-            added_date   = timezone.now(),
+            added_date   = get_local_now(),
             updated_by   = request.user if request.user.is_authenticated else None,
-            updated_date = timezone.now()
+            updated_date = get_local_now()
         )
 
         return JsonResponse({

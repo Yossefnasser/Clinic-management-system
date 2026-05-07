@@ -12,6 +12,7 @@ from django.db.models import Q ,  Count, Sum
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from project.settings import CHAR_100, CHAR_50
 from django.contrib.auth.decorators import login_required
+from app.helpers import get_local_now
 
 @login_required
 def list_of_doctors(request):
@@ -73,8 +74,8 @@ def get_list_of_doctors(request):
 @login_required
 def add_new_doctor(request):
     added_by     = request.user
-    added_date   = datetime.now()
-    updated_date = datetime.now()
+    added_date   = get_local_now()
+    updated_date = get_local_now()
     updated_by   = request.user
     typeOfReq    = request.GET.get('type', 'new')
 
@@ -359,6 +360,7 @@ def api_get_slots(request):
 
     clinic_slots = ClinicSlot.objects.filter(
         clinic_id=clinic_id,
+        clinic__branch=request.user.branch,
         is_active=True,
         deleted_date__isnull=True
     )

@@ -41,6 +41,9 @@ urlpatterns = [
     
     path('add-appointment', appointment.new_appointment, name='add-appointment'),
     path('list-of-oppointments',appointment.list_of_appointments , name= 'list-of-appointments'),
+    path('appointments/today', appointment.today_appointments, name='appointments-today'),
+    path('appointments/check-in', appointment.check_in_appointment, name='appointments-check-in'),
+    path('appointments/quick-create', appointment.quick_create_appointment, name='appointments-quick-create'),
     path('api/new-appointment', appointment.new_appointment_api, name='api_new_appointment'),
     path('api/clinics/<int:clinic_id>/time-slots/', appointment.get_clinic_time_slots, name='get_clinic_time_slots'),
     path('api/clinics/<int:clinic_id>/schedule/', appointment.get_clinic_schedule, name='get_clinic_schedule'),

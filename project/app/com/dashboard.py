@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from app.models import Appointment, Doctor, Invoice, Patient
 from django.utils import timezone
+from app.helpers import get_local_date
 from datetime import timedelta
 from django.db.models import Sum
 from django.contrib.auth.decorators import login_required
@@ -11,7 +12,7 @@ from django.db.models import Sum
 
 @login_required
 def dashboard(request):
-    today = timezone.now().date()
+    today = get_local_date()
     start_of_current_month = today.replace(day=1)
 
     # Previous month boundaries

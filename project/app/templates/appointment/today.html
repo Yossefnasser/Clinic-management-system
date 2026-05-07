@@ -1,0 +1,459 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .slot-card {
+        border-radius: 14px;
+        border: 1px solid #e9ecef;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.04);
+    }
+    .slot-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+    }
+    .slot-card.active {
+        border-color: #16a34a;
+        background: #f0fdf4;
+    }
+    .slot-card.active .status-pill {
+        background: #16a34a;
+        color: #fff;
+    }
+    .slot-card.past {
+        border-color: #e5e7eb;
+        background: #f8fafc;
+        opacity: 0.85;
+    }
+    .slot-card.upcoming .status-pill {
+        background: #2563eb;
+        color: #fff;
+    }
+    .status-pill {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #e2e8f0;
+        color: #475569;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .appointments-card {
+        border-radius: 14px;
+        border: 1px solid #e9ecef;
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.06);
+        overflow: hidden;
+    }
+    .appointments-card .card-header {
+        background: #0f172a;
+        color: #fff;
+        border-bottom: 0;
+    }
+    .appointments-card .table thead th {
+        background: #f8fafc;
+    }
+    .filters-card {
+        border-radius: 14px;
+        border: 1px solid #e9ecef;
+        background: #ffffff;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+    }
+    .filters-card .form-label {
+        font-weight: 600;
+        color: #0f172a;
+    }
+    .filters-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: flex-start;
+        height: 100%;
+    }
+    .slot-meta {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 2px;
+    }
+    .status-badge {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .status-arrived { background: #dcfce7; color: #166534; }
+    .status-open { background: #e0f2fe; color: #075985; }
+    .status-completed { background: #dbeafe; color: #1e40af; }
+    .status-default { background: #f1f5f9; color: #334155; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">مواعيد اليوم</h4>
+        <div class="d-flex align-items-center gap-2">
+            <div class="text-muted">{{ today }}</div>
+            <a href="/add-appointment?type=new&next=/appointments/today" class="btn btn-sm btn-primary">
+                <i class="fas fa-plus me-1"></i> موعد جديد
+            </a>
+        </div>
+    </div>
+
+    <form class="filters-card p-3 mb-4" method="get" action="/appointments/today">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">التاريخ</label>
+                <input type="date" class="form-control" name="date" value="{{ selected_date }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">التخصص</label>
+                <select class="form-select" name="specialization">
+                    <option value="">الكل</option>
+                    {% for spec in specializations %}
+                        <option value="{{ spec.id }}" {% if selected_specialization_id == spec.id|stringformat:"s" %}selected{% endif %}>{{ spec.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-5">
+                <div class="filters-actions">
+                    <button type="submit" class="btn btn-primary">تطبيق</button>
+                    <a href="/appointments/today" class="btn btn-outline-secondary">مسح</a>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if selected_start and selected_end %}
+        <div class="mb-3">
+            <span class="badge bg-info text-dark">عرض قائمة المواعيد للفتحة المختارة</span>
+            <a href="/appointments/today" class="btn btn-sm btn-outline-secondary ms-2">إلغاء التحديد</a>
+        </div>
+    {% endif %}
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <h6 class="mb-2">الفترات النشطة الآن</h6>
+        </div>
+        {% for s in schedule_slots %}
+            {% if s.is_active %}
+                <div class="col-md-4">
+                    <a class="card slot-card active text-decoration-none" href="/appointments/today?date={{ selected_date }}{% if selected_specialization_id %}&specialization={{ selected_specialization_id }}{% endif %}&doctor={{ s.doctor_id }}&clinic={{ s.clinic_id }}&start={{ s.start_time|time:"H:i" }}&end={{ s.end_time|time:"H:i" }}">
+                        <div class="card-body d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold text-dark">{{ s.doctor_name }}</div>
+                                <div class="slot-meta">{{ s.specialization_name }}</div>
+                                <div class="text-muted small">{{ s.clinic_name }}</div>
+                                <div class="text-success small mt-1">{{ s.start_time|time:"h:i A" }} - {{ s.end_time|time:"h:i A" }}</div>
+                                <div class="status-pill mt-2"><i class="fas fa-bolt"></i> نشط الآن</div>
+                            </div>
+                            <div class="d-flex flex-column align-items-end gap-2">
+                                <i class="fas fa-circle text-success"></i>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary quick-slot-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#quickAppointmentModal"
+                                    data-doctor-id="{{ s.doctor_id }}"
+                                    data-doctor-name="{{ s.doctor_name }}"
+                                    data-clinic-id="{{ s.clinic_id }}"
+                                    data-clinic-name="{{ s.clinic_name }}"
+                                    data-start="{{ s.start_time|time:"h:i A" }}"
+                                    data-consultation-price="{{ s.consultation_price }}"
+                                    data-examination-price="{{ s.examination_price }}"
+                                >
+                                    حجز سريع
+                                </button>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            {% endif %}
+        {% empty %}
+            <div class="col-12 text-muted">لا توجد فترات نشطة الآن</div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <h6 class="mb-2">الفترات القادمة اليوم</h6>
+        </div>
+        {% for s in schedule_slots %}
+            {% if s.is_upcoming %}
+                <div class="col-md-4">
+                    <a class="card slot-card upcoming text-decoration-none" href="/appointments/today?date={{ selected_date }}{% if selected_specialization_id %}&specialization={{ selected_specialization_id }}{% endif %}&doctor={{ s.doctor_id }}&clinic={{ s.clinic_id }}&start={{ s.start_time|time:"H:i" }}&end={{ s.end_time|time:"H:i" }}">
+                        <div class="card-body d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold text-dark">{{ s.doctor_name }}</div>
+                                <div class="slot-meta">{{ s.specialization_name }}</div>
+                                <div class="text-muted small">{{ s.clinic_name }}</div>
+                                <div class="text-muted small mt-1">{{ s.start_time|time:"h:i A" }} - {{ s.end_time|time:"h:i A" }}</div>
+                                <div class="status-pill mt-2"><i class="fas fa-clock"></i> قادم</div>
+                            </div>
+                            <div class="d-flex flex-column align-items-end gap-2">
+                                <i class="fas fa-user-md text-primary"></i>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary quick-slot-btn"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#quickAppointmentModal"
+                                    data-doctor-id="{{ s.doctor_id }}"
+                                    data-doctor-name="{{ s.doctor_name }}"
+                                    data-clinic-id="{{ s.clinic_id }}"
+                                    data-clinic-name="{{ s.clinic_name }}"
+                                    data-start="{{ s.start_time|time:"h:i A" }}"
+                                    data-consultation-price="{{ s.consultation_price }}"
+                                    data-examination-price="{{ s.examination_price }}"
+                                >
+                                    حجز سريع
+                                </button>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            {% endif %}
+        {% empty %}
+            <div class="col-12 text-muted">لا توجد فترات قادمة اليوم</div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <h6 class="mb-2">الفترات المنتهية اليوم</h6>
+        </div>
+        {% for s in schedule_slots %}
+            {% if s.is_past %}
+                <div class="col-md-4">
+                    <a class="card slot-card past text-decoration-none" href="/appointments/today?date={{ selected_date }}{% if selected_specialization_id %}&specialization={{ selected_specialization_id }}{% endif %}&doctor={{ s.doctor_id }}&clinic={{ s.clinic_id }}&start={{ s.start_time|time:"H:i" }}&end={{ s.end_time|time:"H:i" }}">
+                        <div class="card-body d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold text-dark">{{ s.doctor_name }}</div>
+                                <div class="slot-meta">{{ s.specialization_name }}</div>
+                                <div class="text-muted small">{{ s.clinic_name }}</div>
+                                <div class="text-muted small mt-1">{{ s.start_time|time:"h:i A" }} - {{ s.end_time|time:"h:i A" }}</div>
+                                <div class="status-pill mt-2"><i class="fas fa-check"></i> منتهي</div>
+                            </div>
+                            <i class="fas fa-check-circle text-muted"></i>
+                        </div>
+                    </a>
+                </div>
+            {% endif %}
+        {% empty %}
+            <div class="col-12 text-muted">لا توجد فترات منتهية اليوم</div>
+        {% endfor %}
+    </div>
+
+    <div class="appointments-card card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <strong>قائمة المواعيد</strong>
+                <span class="text-white-50 ms-2">عرض التفاصيل أسفل حسب الفتحة المختارة</span>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الوقت</th>
+                        <th>المريض</th>
+                        <th>الطبيب</th>
+                        <th>العيادة</th>
+                        <th>المدفوع</th>
+                        <th>الحالة</th>
+                        <th>إجراء</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for appointment in appointments %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>{{ appointment.time|time:"h:i A" }}</td>
+                            <td>{{ appointment.patient.name }}</td>
+                            <td>{{ appointment.doctor.full_name }}</td>
+                            <td>{{ appointment.clinic.name }}</td>
+                            <td>{{ appointment.service_price }} ج</td>
+                            <td>
+                                {% if appointment.status %}
+                                    {% if appointment.status.name == "ARRIVED" %}
+                                        <span class="status-badge status-arrived">تم الحضور</span>
+                                    {% elif appointment.status.name == "OPEN" %}
+                                        <span class="status-badge status-open">محجوز</span>
+                                    {% elif appointment.status.name == "COMPLETED" %}
+                                        <span class="status-badge status-completed">مكتمل</span>
+                                    {% else %}
+                                        <span class="status-badge status-default">{{ appointment.status.name }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="status-badge status-default">غير محدد</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if appointment.status and appointment.status.name in arrived_statuses %}
+                                    <button class="btn btn-sm btn-secondary" disabled>تم التسجيل</button>
+                                {% else %}
+                                    <form method="post" action="{% url 'appointments-check-in' %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="id" value="{{ appointment.id }}">
+                                        <button type="submit" class="btn btn-sm btn-success">تسجيل حضور</button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">لا توجد مواعيد اليوم</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-3">
+        <div class="col-md-6">
+            <div class="p-3 rounded-3 border bg-light">
+                <div class="fw-semibold">إيراد هذه الفترة</div>
+                {% if schedule_revenue is not None %}
+                    <div class="h5 mb-0">{{ schedule_revenue }} ج</div>
+                {% else %}
+                    <div class="text-muted small">اختر فترة لعرض البيانات</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="p-3 rounded-3 border bg-light">
+                <div class="fw-semibold">عدد الحضور</div>
+                {% if schedule_patients_count is not None %}
+                    <div class="h5 mb-0">{{ schedule_patients_count }}</div>
+                {% else %}
+                    <div class="text-muted small">اختر فترة لعرض البيانات</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="quickAppointmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" action="{% url 'appointments-quick-create' %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">حجز موعد سريع</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="doctor_id" id="quickDoctorId">
+                    <input type="hidden" name="clinic_id" id="quickClinicId">
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">رقم الهاتف</label>
+                            <input type="text" class="form-control" name="patient_phone" id="quickPatientPhone" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">اسم المريض</label>
+                            <input type="text" class="form-control" name="patient_name" id="quickPatientName">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fw-semibold">الطبيب</div>
+                        <div id="quickDoctorName" class="text-muted"></div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fw-semibold">العيادة</div>
+                        <div id="quickClinicName" class="text-muted"></div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">التاريخ</label>
+                            <input type="date" class="form-control" name="date" value="{{ today|date:"Y-m-d" }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">الوقت</label>
+                            <input type="text" class="form-control" name="time" id="quickTime" placeholder="08:00 PM" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">الحالة</label>
+                            <select class="form-select" name="status">
+                                <option value="OPEN">محجوز</option>
+                                <option value="ARRIVED">تم الحضور</option>
+                                <option value="COMPLETED">مكتمل</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label">نوع الخدمة</label>
+                            <select class="form-select" name="service_type" id="quickServiceType">
+                                <option value="consultation">استشارة</option>
+                                <option value="examination">كشف</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">السعر</label>
+                            <input type="number" step="0.01" class="form-control" name="service_price" id="quickServicePrice" value="0">
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label">ملاحظات</label>
+                        <textarea class="form-control" name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    let quickPrices = { consultation: null, examination: null };
+
+    function updateQuickPrice() {
+        const type = document.getElementById('quickServiceType').value;
+        if (type === 'consultation' && quickPrices.consultation !== null) {
+            document.getElementById('quickServicePrice').value = quickPrices.consultation;
+        }
+        if (type === 'examination' && quickPrices.examination !== null) {
+            document.getElementById('quickServicePrice').value = quickPrices.examination;
+        }
+    }
+
+    document.querySelectorAll('.quick-slot-btn').forEach(btn => {
+        btn.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            document.getElementById('quickDoctorId').value = btn.dataset.doctorId;
+            document.getElementById('quickClinicId').value = btn.dataset.clinicId;
+            document.getElementById('quickDoctorName').textContent = btn.dataset.doctorName;
+            document.getElementById('quickClinicName').textContent = btn.dataset.clinicName;
+            document.getElementById('quickTime').value = btn.dataset.start;
+
+            quickPrices = {
+                consultation: btn.dataset.consultationPrice || null,
+                examination: btn.dataset.examinationPrice || null
+            };
+            updateQuickPrice();
+        });
+    });
+
+    document.getElementById('quickServiceType').addEventListener('change', updateQuickPrice);
+</script>
+{% endblock %}

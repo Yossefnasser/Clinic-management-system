@@ -725,20 +725,30 @@
         `;
     }
 
+    function normalizeStatus(status) {
+        return (status || '').toString().trim().toLowerCase();
+    }
+
     function getStatusClass(status) {
-        switch(status) {
+        switch(normalizeStatus(status)) {
             case 'completed': return 'status-completed';
+            case 'arrived': return 'status-pending';
+            case 'open': return 'status-pending';
             case 'pending': return 'status-pending';
-            case 'cancelled': return 'status-cancelled';
+            case 'cancelled':
+            case 'canceled': return 'status-cancelled';
             default: return 'status-pending';
         }
     }
 
     function getStatusText(status) {
-        switch(status) {
+        switch(normalizeStatus(status)) {
             case 'completed': return 'مكتمل';
+            case 'arrived': return 'تم الحضور';
+            case 'open': return 'محجوز';
             case 'pending': return 'في الانتظار';
-            case 'cancelled': return 'ملغي';
+            case 'cancelled':
+            case 'canceled': return 'ملغي';
             default: return 'غير محدد';
         }
     }

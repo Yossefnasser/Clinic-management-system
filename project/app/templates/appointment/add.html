@@ -748,6 +748,7 @@ $(document).ready(function() {
     let doctorSchedules = [];
     let selectedServiceType = null;
     let selectedServicePrice = null;
+    let selectedSlot = null;
 
     const today = new Date().toISOString().split('T')[0];
     $('#appointment_date').attr('min', today);
@@ -954,53 +955,92 @@ $(document).ready(function() {
     'السبت': 6
 };
 
-function getNextDate(dayName, sessionEndTime) {
-  const jsDay = dayMap[dayName];
-  if (jsDay === undefined) return "غير معروف";
+function parseTimeTo24(timeStr) {
+    if (!timeStr) return null;
 
-  // 🧩 Fix: handle missing time
-  if (!sessionEndTime) return "غير محدد";
+    const trimmed = timeStr.trim();
+    console.log("parseTimeTo24 input:", trimmed);
 
-  const today = new Date();
-  const todayDay = today.getDay();
-
-  let diff = jsDay - todayDay;
-  if (diff < 0) diff += 7;
-
-  const [sessionHour, sessionMinute] = sessionEndTime.split(':').map(Number);
-
-  if (diff === 0) {
-    const nowHour = today.getHours();
-    const nowMinute = today.getMinutes();
-    if (nowHour > sessionHour || (nowHour === sessionHour && nowMinute >= sessionMinute)) {
-      diff = 7;
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|ص|م)?$/i);
+    if (!match) {
+        console.log("parseTimeTo24 no match for:", trimmed);
+        return null;
     }
-  }
 
-  const nextDate = new Date(today);
-  nextDate.setDate(today.getDate() + diff);
-  return nextDate.toISOString().split("T")[0];
+    let hour = parseInt(match[1], 10);
+    const minute = parseInt(match[2], 10);
+    const meridiemRaw = match[4] ? match[4].toUpperCase() : null;
+
+    const meridiem = meridiemRaw === 'ص' ? 'AM' : meridiemRaw === 'م' ? 'PM' : meridiemRaw;
+
+    console.log("parseTimeTo24 parsed:", { hour, minute, meridiem });
+
+    if (meridiem) {
+        if (meridiem === 'PM' && hour !== 12) hour += 12;
+        if (meridiem === 'AM' && hour === 12) hour = 0;
+    }
+
+    return { hour, minute };
+}
+
+function getNextDate(dayName, sessionEndTime) {
+    const jsDay = dayMap[dayName];
+    if (jsDay === undefined) return "غير معروف";
+
+    // 🧩 Fix: handle missing time
+    if (!sessionEndTime) return "غير محدد";
+
+    const today = new Date();
+    const todayDay = today.getDay();
+    console.log("Calculating next date for", dayName, "with session end time", sessionEndTime, today, "which is day", todayDay);
+
+    let diff = jsDay - todayDay;
+    if (diff < 0) diff += 7;
+
+    const parsed = parseTimeTo24(sessionEndTime);
+    if (!parsed) return "غير محدد";
+
+    const sessionHour = parsed.hour;
+    const sessionMinute = parsed.minute;
+
+    if (diff === 0) {
+        const nowHour = today.getHours();
+        const nowMinute = today.getMinutes();
+        console.log("combaring dates");
+        console.log("Comparing times - Now:", nowHour + ":" + nowMinute, "Session End:", sessionHour + ":" + sessionMinute);
+        if (nowHour > sessionHour || (nowHour === sessionHour && nowMinute >= sessionMinute)) {
+            diff = 7;
+        }
+    }
+
+    const nextDate = new Date(today);
+    nextDate.setDate(today.getDate() + diff);
+    return nextDate.toISOString().split("T")[0];
 }
 
 
 // When day changes:
-$('#day_of_week').change(function() {
+    $('#day_of_week').change(function() {
     const selectedDayId = $(this).val();
     const detailsContainer = $('#appointment_details');
     detailsContainer.html('');
+    selectedSlot = null;
 
     const schedulesForDay = doctorSchedules.filter(sch => sch.day_id == selectedDayId);
 
         schedulesForDay.forEach(function(sch) {
             // 🧩 Loop over all merged slots for this day
-            sch.slots.forEach(function(slot) {
+            sch.slots.forEach(function(slot, index) {
             const nextDate = getNextDate(sch.day, slot.end_time);
             console.log("Next date for", sch.day, "is", nextDate);
 
             detailsContainer.append(`
-                <div class="card p-3 mb-2">
-                <div class="row">
-                    <div class="col-md-4">
+                <label class="card p-3 mb-2 slot-card" data-slot-start="${slot.start_time}" data-slot-end="${slot.end_time}" data-slot-date="${nextDate}" data-slot-clinic="${sch.clinic}" data-slot-day="${sch.day}">
+                <div class="row align-items-center">
+                    <div class="col-md-1 text-center">
+                        <input type="radio" name="slot_choice" class="form-check-input slot-radio">
+                    </div>
+                    <div class="col-md-3">
                     <strong class="text-primary">التاريخ المتوقع:</strong><br>
                     <span>${nextDate}</span>
                     </div>
@@ -1013,11 +1053,25 @@ $('#day_of_week').change(function() {
                     <span>${sch.clinic}</span>
                     </div>
                 </div>
-                </div>
+                </label>
             `);
             });
         });
         });
+
+    $(document).on('change', '.slot-radio', function() {
+        const card = $(this).closest('.slot-card');
+        $('.slot-card').removeClass('border-success');
+        card.addClass('border-success');
+
+        selectedSlot = {
+            date: card.data('slot-date'),
+            start_time: card.data('slot-start'),
+            end_time: card.data('slot-end'),
+            clinic: card.data('slot-clinic'),
+            day: card.data('slot-day')
+        };
+    });
     // Navigation buttons
     $('#changePatientBtn').click(() => goToStep(1));
     $('#backToStep1Btn').click(() => goToStep(1));
@@ -1035,29 +1089,22 @@ $('#day_of_week').change(function() {
             return;
         }
 
-        const selectedDayId = $('#day_of_week').val();
-        const selectedSchedule = doctorSchedules.find(sch => sch.day_id == selectedDayId);
-
-        if (!selectedSchedule) {
-            showError("لا يوجد مواعيد لهذا اليوم");
+        if (!selectedSlot) {
+            showError('يرجى اختيار وقت الموعد');
             return;
         }
-
-        const firstSlot = selectedSchedule.slots[0];
-
-        const nextDate = getNextDate(selectedSchedule.day, firstSlot.end_time);
 
         appointmentData = {
             doctor_id: $('#doctor').val(),
             doctor: $('#doctor option:selected').text(),
             specialization: $('#specialization option:selected').text(),
-            clinic: selectedSchedule.clinic,
+            clinic: selectedSlot.clinic,
             patient_id: selectedPatient.id,
             patient: selectedPatient,
             patient_phone: selectedPatient.phone,
-            date: nextDate,
-            time: `${firstSlot.start_time} - ${firstSlot.end_time}`,
-            day: selectedSchedule.day,
+            date: selectedSlot.date,
+            time: `${selectedSlot.start_time} - ${selectedSlot.end_time}`,
+            day: selectedSlot.day,
             type: $('#appointment_type option:selected').text(),
             service_type: selectedServiceType === 'consultation' ? 'استشارة' : 'كشف',
             service_price: selectedServicePrice,

@@ -106,7 +106,6 @@ class Patient(BaseModel):
     
     class Meta:
         db_table = "Patient"
-        unique_together = [['phone_number', 'branch']]
 
     def to_json(self):
         return {
@@ -269,3 +268,35 @@ class Invoice(BaseModel):
 
     def __str__(self):
         return f"Invoice #{self.invoice_number} for {self.appointment.patient}"
+
+
+class DailyStats(models.Model):
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    date = models.DateField()
+    total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    total_patients = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [["branch", "date"]]
+
+    def __str__(self):
+        return f"DailyStats {self.date} - {self.branch_id}"
+
+
+class ScheduleStats(models.Model):
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT)
+    doctor = models.ForeignKey(Doctor, on_delete=models.PROTECT)
+    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT)
+    date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+    total_patients = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [["branch", "doctor", "clinic", "date", "start_time", "end_time"]]
+
+    def __str__(self):
+        return f"ScheduleStats {self.date} {self.doctor_id}"
