@@ -66,7 +66,9 @@ def get_id_of_object(hash_used):
 def delete(request, model_name, condition):
     deleted_date            = get_local_now()
     object                  = model_name.objects.filter(condition)
-    _id                     = '_' + str(object[0].id)  + '_DELETED'
+
+    if not object.exists():
+        return JsonResponse({"Result": "Fail", "message": "Object not found"}, safe=False, status=404)
 
     object.update(deleted_by=request.user, deleted_date = deleted_date)
 

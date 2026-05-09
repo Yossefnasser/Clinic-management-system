@@ -167,6 +167,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'app.User'
 
+# Printer Configuration for ESCPOS thermal printer
+PRINTER_CONFIG = {
+    'enabled': True,  # Set to False to disable printing
+    'type': 'usb',  # Options: 'serial', 'network', 'usb', 'file'
+    'port': 'COM1',    # For serial: COM1, COM3, etc. For USB: not used
+    'host': '192.168.1.100',  # For network printer: IP address
+    'usb_vendor_id': 0x483,
+    'usb_product_id': 0x5743,
+    'usb_interface': 0,
+}
+
 # Add this to your settings.py
 CSRF_TRUSTED_ORIGINS = [
     'https://cms-production-6742.up.railway.app',

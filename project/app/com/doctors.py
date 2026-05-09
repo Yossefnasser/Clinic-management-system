@@ -12,7 +12,7 @@ from django.db.models import Q ,  Count, Sum
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from project.settings import CHAR_100, CHAR_50
 from django.contrib.auth.decorators import login_required
-from app.helpers import get_local_now
+from app.helpers import apply_doctor_branch_pricing, get_local_now
 
 @login_required
 def list_of_doctors(request):
@@ -29,7 +29,7 @@ def get_list_of_doctors(request):
         page_number = (start // length) + 1
 
         # Add ordering to avoid pagination warning
-        queryset = Doctor.objects.filter(branch=request.user.branch, deleted_date__isnull=True).order_by('id')
+        queryset = Doctor.objects.filter( deleted_date__isnull=True).order_by('id')
         
         if search_value:
             queryset = queryset.filter(
@@ -83,14 +83,15 @@ def add_new_doctor(request):
 
     if typeOfReq == 'edit':
         idOfObject       = get_id_of_object(request.GET.get('id'))
-        data_to_insert   = Doctor.objects.filter(branch=request.user.branch, id=idOfObject).first()
+        data_to_insert   = Doctor.objects.filter(id=idOfObject, deleted_date__isnull=True).first()
+        if data_to_insert:
+            apply_doctor_branch_pricing(data_to_insert, request.user.branch)
         doctor_schedules = DoctorSchedule.objects.filter(
             branch=request.user.branch,
             doctor_id=idOfObject, 
             deleted_date__isnull=True
         )
         days_of_week = DaysOfWeek.objects.all()
-        print(" data to insert consultation_price , examination_price ", data_to_insert.consultation_price , data_to_insert.examination_price)
         for s in doctor_schedules:
             slots = s.clinic_slot.all().order_by('start_time')
             merged = merge_continuous_slots(slots)
@@ -149,7 +150,7 @@ def add_new_doctor(request):
         specialization_obj = Specialization.objects.filter(id=specialization_id).first()
 
         if typeOfReq == 'edit':
-            doctor_obj = Doctor.objects.filter(branch=request.user.branch, id=idOfObject).first()
+            doctor_obj = Doctor.objects.filter(id=idOfObject, deleted_date__isnull=True).first()
 
             doctor_obj.full_name               = full_name
             doctor_obj.phone_number            = phone_number
@@ -157,9 +158,20 @@ def add_new_doctor(request):
             doctor_obj.specialization          = specialization_obj
             doctor_obj.updated_by              = updated_by
             doctor_obj.updated_date            = updated_date
-            doctor_obj.examination_price      = examination_price
-            doctor_obj.consultation_price     = consultation_price
             doctor_obj.save()
+
+            from app.models import DoctorBranch
+            branch_profile, _ = DoctorBranch.objects.update_or_create(
+                doctor=doctor_obj,
+                branch=request.user.branch,
+                defaults={
+                    'examination_price': examination_price or 0,
+                    'consultation_price': consultation_price or 0,
+                    'is_active': True,
+                    'updated_by': updated_by,
+                    'updated_date': updated_date,
+                }
+            )
             
             hashed_id = request.GET.get('id')
 
@@ -173,11 +185,23 @@ def add_new_doctor(request):
                 added_by            = added_by,
                 added_date          = added_date,
                 updated_by          = updated_by,
-                examination_price   = examination_price,
-                consultation_price  = consultation_price,
                 updated_date        = updated_date
             )
             data_to_insert.save()
+            from app.models import DoctorBranch
+            DoctorBranch.objects.update_or_create(
+                doctor=data_to_insert,
+                branch=request.user.branch,
+                defaults={
+                    'examination_price': examination_price or 0,
+                    'consultation_price': consultation_price or 0,
+                    'is_active': True,
+                    'added_by': added_by,
+                    'added_date': added_date,
+                    'updated_by': updated_by,
+                    'updated_date': updated_date,
+                }
+            )
             hashed_id = get_id_hashed_of_object(data_to_insert.id)
 
         return HttpResponseRedirect('/add-doctor?type=edit&id=%s' % hashed_id)
@@ -210,7 +234,7 @@ def check_if_doctor_exists(request):
         if not phone_number:
             return JsonResponse({'exists': False})
         
-        query = Doctor.objects.filter(branch=request.user.branch, phone_number=phone_number)
+        query = Doctor.objects.filter(phone_number=phone_number, deleted_date__isnull=True)
         if doctor_id:
             query = query.exclude(id=doctor_id)
             
@@ -235,17 +259,26 @@ def doctor_schedule(request, schedule_id=None):
             valid_from      = request.POST.get('valid_from')
             valid_to        = request.POST.get('valid_to')
             
-            doctor          = Doctor.objects.filter(branch=request.user.branch, id=doctor_id).first()
+            doctor          = Doctor.objects.filter(id=doctor_id, deleted_date__isnull=True).first()
             clinic          = Clinic.objects.filter(branch=request.user.branch, id=clinic_id).first()
             day_of_week     = DaysOfWeek.objects.get(id=day_of_week_id)
             
             slot_ids_str = request.POST.get('clinic_slot_ids', '[]')
             slot_ids = json.loads(slot_ids_str)
             
-            clinic_slots = ClinicSlot.objects.filter(id__in=slot_ids).order_by('start_time')
+            clinic_slots = ClinicSlot.objects.filter(
+                id__in=slot_ids,
+                clinic__branch=request.user.branch,
+                deleted_date__isnull=True,
+            ).order_by('start_time')
 
             if schedule_id is not None:
                 schedule = DoctorSchedule.objects.filter(branch=request.user.branch, id=schedule_id).first()
+                if not schedule:
+                    return JsonResponse({
+                        "success": False,
+                        "message": "Schedule not found"
+                    }, status=404)
                 schedule.doctor              = doctor
                 schedule.clinic              = clinic
                 schedule.day_of_week         = day_of_week
@@ -254,7 +287,7 @@ def doctor_schedule(request, schedule_id=None):
                 schedule.branch              = request.user.branch
                 schedule.save()
                 message = 'Doctor schedule updated successfully.'
-                schedule.clinic_slot.set(slot_ids)
+                schedule.clinic_slot.set(clinic_slots)
 
             else:  
                 schedule = DoctorSchedule.objects.create(
@@ -290,7 +323,9 @@ def doctor_schedule(request, schedule_id=None):
 @login_required
 def doctor_details(request):
     idOfObject       = get_id_of_object(request.GET.get('id'))
-    doctor = Doctor.objects.filter(branch=request.user.branch, id=idOfObject).first()
+    doctor = Doctor.objects.filter(id=idOfObject, deleted_date__isnull=True).first()
+    if doctor:
+        apply_doctor_branch_pricing(doctor, request.user.branch)
 
     doctor_schedules = DoctorSchedule.objects.filter(
         branch=request.user.branch,
@@ -343,7 +378,7 @@ def doctor_details(request):
 @login_required
 def delete_doctor_schedule(request,schedule_id):
     try:
-        delete(request, DoctorSchedule, Q(id = schedule_id))
+        delete(request, DoctorSchedule, Q(branch=request.user.branch, id=schedule_id))
         return JsonResponse({
             'success' : True, 
         })
@@ -394,7 +429,7 @@ def api_get_slots(request):
 @login_required
 def get_latest_appointments(request, doctor_id):
     try:
-        doctor = Doctor.objects.filter(branch=request.user.branch, id=doctor_id, deleted_date__isnull=True).first()
+        doctor = Doctor.objects.filter(id=doctor_id, deleted_date__isnull=True).first()
         latest_appointments = Appointment.objects.filter(
             branch=request.user.branch,
             doctor=doctor,

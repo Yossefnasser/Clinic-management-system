@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from project.settings import CHAR_100
 from django.contrib.auth.decorators import login_required
-from app.helpers import get_local_now
+from app.helpers import apply_doctor_branch_pricing, get_local_now
 ####################  Patient  #################
 
 @login_required
@@ -90,7 +90,10 @@ def add_new_patient(request):
         data_to_insert = None
 
     all_specializations = Specialization.objects.filter(deleted_date__isnull=True)
-    all_doctors         = Doctor.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
+    all_doctors         = Doctor.objects.filter(deleted_date__isnull=True)
+
+    for doctor in all_doctors:
+        apply_doctor_branch_pricing(doctor, request.user.branch)
 
     context = {
         'all_specializations'   : all_specializations , 

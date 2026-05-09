@@ -90,6 +90,20 @@ class Doctor(BaseModel):
     
     def __str__(self):
         return f"{self.full_name}"
+
+
+class DoctorBranch(BaseModel):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='branch_profiles')
+    branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='doctor_profiles')
+    examination_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    consultation_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = [['doctor', 'branch']]
+
+    def __str__(self):
+        return f"{self.doctor.full_name} @ {self.branch_id}"
     
 
 class Patient(BaseModel):

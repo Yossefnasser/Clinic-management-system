@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from app.models import Appointment, Doctor, Invoice, Patient
+from app.models import Appointment, DoctorBranch, Invoice, Patient
 from django.utils import timezone
 from app.helpers import get_local_date
 from datetime import timedelta
@@ -26,6 +26,7 @@ def dashboard(request):
     # --- Patients ---
     total_patients_count = Patient.objects.filter(branch=request.user.branch, deleted_date__isnull=True).count()
     patients_this_month = Patient.objects.filter(
+        branch=request.user.branch,
         deleted_date__isnull=True,
         added_date__gte=start_of_current_month,
         added_date__lte=today
@@ -57,10 +58,12 @@ def dashboard(request):
     ).count()
 
     # --- Doctors ---
-    active_doctors_count = Doctor.objects.filter(
+    active_doctors_count = DoctorBranch.objects.filter(
         branch=request.user.branch,
         deleted_date__isnull=True,
-        is_active=True
+        is_active=True,
+        doctor__deleted_date__isnull=True,
+        doctor__is_active=True,
     ).count()
 
     # --- Income ---

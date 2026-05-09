@@ -3,8 +3,9 @@ from django.utils import timezone
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from app.templatetags.helpers import get_id_of_object, merge_continuous_slots
-from app.helpers import get_local_now, parse_time
+from app.helpers import apply_doctor_branch_pricing, get_local_now, parse_time
 from app.models import Appointment, Clinic, ClinicSlot, DailyStats, Doctor, DoctorSchedule, Patient, ScheduleStats, Status, User ,Specialization , DaysOfWeek
+from app.printer import TicketPrinter
 from django.db.models import Q, Sum, Count
 import json
 
@@ -96,6 +97,7 @@ def today_appointments(request):
     is_future_day = today > local_now.date()
     schedule_slots = []
     for schedule in schedules.select_related("doctor", "clinic", "day_of_week"):
+        apply_doctor_branch_pricing(schedule.doctor, request.user.branch)
         slots = schedule.clinic_slot.all().order_by("start_time")
         merged_slots = merge_continuous_slots(slots)
         for start_time, end_time in merged_slots:
@@ -226,7 +228,10 @@ def today_appointments(request):
 @login_required
 @require_POST
 def check_in_appointment(request):
+    from django.conf import settings
+    
     appointment_id = request.POST.get("id")
+    ticket_number = request.POST.get("ticket_number")
     if not appointment_id:
         messages.error(request, "رقم الموعد غير صالح")
         return redirect("appointments-today")
@@ -235,7 +240,7 @@ def check_in_appointment(request):
         branch=request.user.branch,
         id=appointment_id,
         deleted_date__isnull=True,
-    ).select_related("status").first()
+    ).select_related("status", "patient", "doctor", "clinic").first()
 
     if not appointment:
         messages.error(request, "الموعد غير موجود")
@@ -247,7 +252,66 @@ def check_in_appointment(request):
     appointment.updated_date = get_local_now()
     appointment.save()
 
+    # Try to print ticket (non-blocking - won't fail the check-in if printer unavailable)
+    printer_config = getattr(settings, 'PRINTER_CONFIG', {})
+    if printer_config.get('enabled', False):
+        try:
+            printer = TicketPrinter(
+                printer_type=printer_config.get('type', 'usb'),
+                usb_vendor_id=printer_config.get('usb_vendor_id'),
+                usb_product_id=printer_config.get('usb_product_id'),
+            )
+            if printer.is_connected():
+                printer.print_appointment_ticket(appointment, ticket_number=ticket_number)
+        except Exception as e:
+            print(f"Printer error (non-blocking): {str(e)}")
+            # Don't fail the check-in just because printer failed
+
     messages.success(request, "تم تسجيل حضور المريض")
+    return redirect("appointments-today")
+
+
+@login_required
+@require_POST
+def reprint_ticket(request):
+    from django.conf import settings
+
+    appointment_id = request.POST.get("id")
+    ticket_number = request.POST.get("ticket_number")
+
+    if not appointment_id:
+        messages.error(request, "رقم الموعد غير صالح")
+        return redirect("appointments-today")
+
+    appointment = Appointment.objects.filter(
+        branch=request.user.branch,
+        id=appointment_id,
+        deleted_date__isnull=True,
+    ).select_related("patient", "doctor", "clinic").first()
+
+    if not appointment:
+        messages.error(request, "الموعد غير موجود")
+        return redirect("appointments-today")
+
+    printer_config = getattr(settings, 'PRINTER_CONFIG', {})
+    if printer_config.get('enabled', False):
+        try:
+            printer = TicketPrinter(
+                printer_type=printer_config.get('type', 'usb'),
+                usb_vendor_id=printer_config.get('usb_vendor_id'),
+                usb_product_id=printer_config.get('usb_product_id'),
+            )
+            if printer.is_connected():
+                printer.print_appointment_ticket(appointment, ticket_number=ticket_number)
+                messages.success(request, "تمت إعادة طباعة التذكرة")
+            else:
+                messages.error(request, "الطابعة غير متصلة")
+        except Exception as e:
+            print(f"Printer error (non-blocking): {str(e)}")
+            messages.error(request, "فشل إعادة الطباعة")
+    else:
+        messages.error(request, "الطابعة غير مفعلة")
+
     return redirect("appointments-today")
 
 
@@ -296,7 +360,7 @@ def quick_create_appointment(request):
             updated_by=request.user,
             updated_date=get_local_now(),
         )
-    doctor = Doctor.objects.filter(branch=request.user.branch, id=doctor_id).first()
+    doctor = Doctor.objects.filter(id=doctor_id, deleted_date__isnull=True).first()
     clinic = Clinic.objects.filter(branch=request.user.branch, id=clinic_id).first()
 
     if not patient:
@@ -369,7 +433,7 @@ def get_clinic_schedule(request,clinic_id):
         if schedule.doctor.deleted_date is None:
             print(f"Schedule ID: {schedule.id}, Doctor: {schedule.doctor.full_name}")
 
-        for slot in schedule.clinic_slot.all():
+        for slot in schedule.clinic_slot.filter(clinic__branch=request.user.branch, deleted_date__isnull=True):
             schedule_data.append({
                 **schedule.to_json(),
                 "start_time": slot.start_time,
@@ -397,7 +461,9 @@ def new_appointment(request):
         data_to_insert = None
 
     # Load needed data for form
-    doctors = Doctor.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
+    doctors = Doctor.objects.filter(deleted_date__isnull=True)
+    for doctor in doctors:
+        apply_doctor_branch_pricing(doctor, request.user.branch)
     clinics = Clinic.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
     all_specializations = Specialization.objects.filter(deleted_date__isnull=True)
 
@@ -421,7 +487,7 @@ def new_appointment(request):
         status     = request.POST.get('status', 'OPEN')
         status_obj = Status.objects.get(name=status)
         patient_obj = Patient.objects.filter(branch=request.user.branch, id=patient_id).first()
-        doctor_obj  = Doctor.objects.filter(branch=request.user.branch, id=doctor_id).first()
+        doctor_obj  = Doctor.objects.filter(id=doctor_id, deleted_date__isnull=True).first()
         clinic_obj  = Clinic.objects.filter(branch=request.user.branch, id=clinic_id).first()
 
         date_str = request.POST.get('date')
@@ -504,7 +570,7 @@ def new_appointment_api(request):
                         end_time   = datetime.strptime(end_str, "%I:%M %p").time()
                 # status_obj = Status.objects.get(name=status)
                 patient_obj = Patient.objects.filter(branch=request.user.branch, id=patient_id).first()
-                doctor_obj  = Doctor.objects.filter(branch=request.user.branch, id=doctor_id).first()
+                doctor_obj  = Doctor.objects.filter(id=doctor_id, deleted_date__isnull=True).first()
                 clinic_obj  = Clinic.objects.filter(branch=request.user.branch, name=clinic_name).first() if clinic_name else None
 
                 # clinic_obj  = doctor_schedule.clinic if doctor_schedule.exists() else None
@@ -547,10 +613,12 @@ def api_get_doctors_by_specialization(request):
     print(f"-----------------{specialization_id}-----------------")
 
     doctors = Doctor.objects.filter(
-        branch=request.user.branch,
         specialization__id=specialization_id,
         deleted_date__isnull=True
     )
+
+    for doctor in doctors:
+        apply_doctor_branch_pricing(doctor, request.user.branch)
 
     return JsonResponse({
         "success": True,

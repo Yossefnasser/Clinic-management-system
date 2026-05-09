@@ -298,15 +298,24 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if appointment.status and appointment.status.name in arrived_statuses %}
-                                    <button class="btn btn-sm btn-secondary" disabled>تم التسجيل</button>
-                                {% else %}
-                                    <form method="post" action="{% url 'appointments-check-in' %}">
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% if appointment.status and appointment.status.name in arrived_statuses %}
+                                        <button class="btn btn-sm btn-secondary" disabled>تم التسجيل</button>
+                                    {% else %}
+                                        <form method="post" action="{% url 'appointments-check-in' %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="id" value="{{ appointment.id }}">
+                                            <input type="hidden" name="ticket_number" value="{{ forloop.counter }}">
+                                            <button type="submit" class="btn btn-sm btn-success">تسجيل حضور</button>
+                                        </form>
+                                    {% endif %}
+                                    <form method="post" action="{% url 'appointments-reprint-ticket' %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="id" value="{{ appointment.id }}">
-                                        <button type="submit" class="btn btn-sm btn-success">تسجيل حضور</button>
+                                        <input type="hidden" name="ticket_number" value="{{ forloop.counter }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">إعادة طباعة</button>
                                     </form>
-                                {% endif %}
+                                </div>
                             </td>
                         </tr>
                     {% empty %}
