@@ -22,6 +22,7 @@ def render_arabic_image(text, font_path=ARABIC_FONT_PATH, font_size=26, width=PR
 
     font = ImageFont.truetype(font_path, font_size)
 
+
     # Measure text size
     dummy = Image.new('RGB', (1, 1))
     draw = ImageDraw.Draw(dummy)
