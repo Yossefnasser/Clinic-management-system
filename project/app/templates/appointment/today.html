@@ -309,6 +309,7 @@
                                             <button type="submit" class="btn btn-sm btn-success">تسجيل حضور</button>
                                         </form>
                                     {% endif %}
+                                    <a class="btn btn-sm btn-outline-secondary" href="/add-appointment?type=edit&id={{ appointment.id }}&next=/appointments/today">تعديل</a>
                                     <form method="post" action="{% url 'appointments-reprint-ticket' %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="id" value="{{ appointment.id }}">
@@ -347,6 +348,15 @@
                 {% else %}
                     <div class="text-muted small">اختر فترة لعرض البيانات</div>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-3">
+        <div class="col-12">
+            <div class="p-3 rounded-3 border bg-light">
+                <div class="fw-semibold">إجمالي إيراد اليوم</div>
+                <div class="h5 mb-0">{{ day_total_revenue }} ج</div>
             </div>
         </div>
     </div>

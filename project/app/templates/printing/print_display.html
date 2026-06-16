@@ -1,0 +1,141 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Print Display</title>
+    <style>
+        @media print {
+            body * { visibility: hidden; }
+            #ticket, #ticket * { visibility: visible; }
+            #ticket {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 80mm;
+            }
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            padding: 20px;
+        }
+        #status {
+            color: #555;
+            font-size: 14px;
+        }
+        #ticket {
+            width: 300px;
+            background: white;
+            padding: 10px;
+            display: none;
+        }
+        .ticket-clinic {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        .ticket-divider {
+            border-top: 1px dashed #000;
+            margin: 8px 0;
+        }
+        .ticket-number {
+            text-align: center;
+            font-size: 48px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .ticket-row {
+            text-align: right;
+            direction: rtl;
+            font-size: 16px;
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <h3>Print Display — do not close this tab</h3>
+    <div id="status">Waiting for print jobs...</div>
+
+    <div id="ticket">
+        <div class="ticket-clinic" id="t-clinic"></div>
+        <div class="ticket-divider"></div>
+        <div class="ticket-number" id="t-number"></div>
+        <div class="ticket-divider"></div>
+        <div class="ticket-row" id="t-doctor"></div>
+        <div class="ticket-row" id="t-time"></div>
+        <div class="ticket-divider"></div>
+    </div>
+
+    <script>
+        const POLL_URL = "{% url 'print_jobs_pending' %}";
+        const COMPLETE_URL_BASE = "/print-jobs/";  // + id + /complete/
+        const POLL_INTERVAL_MS = 4000;
+
+        function setStatus(msg) {
+            document.getElementById('status').innerText = msg;
+        }
+
+        function fillTicket(job) {
+            document.getElementById('t-clinic').innerText = job.clinic_name;
+            document.getElementById('t-number').innerText = "#" + job.display_number;
+            document.getElementById('t-doctor').innerText = "الدكتور: " + job.doctor_name;
+            document.getElementById('t-time').innerText = "الوقت: " + job.appointment_time;
+        }
+
+        async function markComplete(jobId) {
+            try {
+                await fetch(COMPLETE_URL_BASE + jobId + "/complete/", {
+                    method: "POST",
+                    headers: { "X-CSRFToken": getCookie("csrftoken") }
+                });
+            } catch (e) {
+                console.error("Failed to mark job complete", e);
+            }
+        }
+
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return "";
+        }
+
+        async function checkForJob() {
+            try {
+                const res = await fetch(POLL_URL);
+                if (!res.ok) {
+                    setStatus("Server error, retrying...");
+                    return;
+                }
+                const data = await res.json();
+
+                if (!data.job) {
+                    setStatus("Waiting for print jobs... (last checked " + new Date().toLocaleTimeString() + ")");
+                    return;
+                }
+
+                setStatus("Printing ticket #" + data.job.display_number + "...");
+                fillTicket(data.job);
+
+                document.getElementById('ticket').style.display = 'block';
+
+                window.print();
+
+                await markComplete(data.job.id);
+
+                document.getElementById('ticket').style.display = 'none';
+                setStatus("Done. Waiting for next job...");
+
+            } catch (e) {
+                setStatus("Connection error, retrying...");
+                console.error(e);
+            }
+        }
+
+        setInterval(checkForJob, POLL_INTERVAL_MS);
+        checkForJob();
+    </script>
+</body>
+</html>

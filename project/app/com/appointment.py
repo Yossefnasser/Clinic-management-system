@@ -4,8 +4,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from app.templatetags.helpers import get_id_of_object, merge_continuous_slots
 from app.helpers import apply_doctor_branch_pricing, get_local_now, parse_time
-from app.models import Appointment, Clinic, ClinicSlot, DailyStats, Doctor, DoctorSchedule, Patient, ScheduleStats, Status, User ,Specialization , DaysOfWeek
-from app.printer import TicketPrinter
+from app.models import Appointment, Clinic, ClinicSlot, DailyStats, Doctor, DoctorSchedule, Patient, PrintJob, ScheduleStats, Status, User ,Specialization , DaysOfWeek
 from django.db.models import Q, Sum, Count
 import json
 
@@ -228,8 +227,6 @@ def today_appointments(request):
 @login_required
 @require_POST
 def check_in_appointment(request):
-    from django.conf import settings
-    
     appointment_id = request.POST.get("id")
     ticket_number = request.POST.get("ticket_number")
     if not appointment_id:
@@ -252,20 +249,11 @@ def check_in_appointment(request):
     appointment.updated_date = get_local_now()
     appointment.save()
 
-    # Try to print ticket (non-blocking - won't fail the check-in if printer unavailable)
-    printer_config = getattr(settings, 'PRINTER_CONFIG', {})
-    if printer_config.get('enabled', False):
-        try:
-            printer = TicketPrinter(
-                printer_type=printer_config.get('type', 'usb'),
-                usb_vendor_id=printer_config.get('usb_vendor_id'),
-                usb_product_id=printer_config.get('usb_product_id'),
-            )
-            if printer.is_connected():
-                printer.print_appointment_ticket(appointment, ticket_number=ticket_number)
-        except Exception as e:
-            print(f"Printer error (non-blocking): {str(e)}")
-            # Don't fail the check-in just because printer failed
+    # Queue a print job instead of printing directly
+    PrintJob.objects.create(
+        appointment=appointment,
+        ticket_number=ticket_number or appointment.id,
+    )
 
     messages.success(request, "تم تسجيل حضور المريض")
     return redirect("appointments-today")
@@ -274,8 +262,6 @@ def check_in_appointment(request):
 @login_required
 @require_POST
 def reprint_ticket(request):
-    from django.conf import settings
-
     appointment_id = request.POST.get("id")
     ticket_number = request.POST.get("ticket_number")
 
@@ -293,27 +279,13 @@ def reprint_ticket(request):
         messages.error(request, "الموعد غير موجود")
         return redirect("appointments-today")
 
-    printer_config = getattr(settings, 'PRINTER_CONFIG', {})
-    if printer_config.get('enabled', False):
-        try:
-            printer = TicketPrinter(
-                printer_type=printer_config.get('type', 'usb'),
-                usb_vendor_id=printer_config.get('usb_vendor_id'),
-                usb_product_id=printer_config.get('usb_product_id'),
-            )
-            if printer.is_connected():
-                printer.print_appointment_ticket(appointment, ticket_number=ticket_number)
-                messages.success(request, "تمت إعادة طباعة التذكرة")
-            else:
-                messages.error(request, "الطابعة غير متصلة")
-        except Exception as e:
-            print(f"Printer error (non-blocking): {str(e)}")
-            messages.error(request, "فشل إعادة الطباعة")
-    else:
-        messages.error(request, "الطابعة غير مفعلة")
+    PrintJob.objects.create(
+        appointment=appointment,
+        ticket_number=ticket_number or appointment.id,
+    )
+    messages.success(request, "تمت إضافة التذكرة لقائمة الطباعة")
 
     return redirect("appointments-today")
-
 
 @login_required
 @require_POST
