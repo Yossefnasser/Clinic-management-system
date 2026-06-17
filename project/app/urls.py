@@ -24,6 +24,7 @@ urlpatterns = [
     path('delete-doctor',   doctors.delete_doctor, name='delete-doctor'),
     path('check-if-doctor-exists', doctors.check_if_doctor_exists, name='check-if-doctor-exists'),
     
+    
     path('doctor-schedule/add/', doctors.doctor_schedule, name='add-doctor-schedule'),
     path('doctor-schedule/update/<int:schedule_id>/', doctors.doctor_schedule, name='update-doctor-schedule'),
     path('doctor-schedule/delete/<int:schedule_id>/',doctors.delete_doctor_schedule, name='delete-doctor-schedule'),
