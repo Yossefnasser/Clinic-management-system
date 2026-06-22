@@ -64,7 +64,10 @@
         <div class="ticket-number" id="t-number"></div>
         <div class="ticket-divider"></div>
         <div class="ticket-row" id="t-doctor"></div>
+        <div class="ticket-row" id="t-date"></div>
         <div class="ticket-row" id="t-time"></div>
+        <div class="ticket-row" id="t-patient"></div>
+        <div class="ticket-row" id="t-phone"></div>
         <div class="ticket-divider"></div>
     </div>
 
@@ -81,7 +84,10 @@
             document.getElementById('t-clinic').innerText = job.clinic_name;
             document.getElementById('t-number').innerText = "#" + job.display_number;
             document.getElementById('t-doctor').innerText = "الدكتور: " + job.doctor_name;
-            document.getElementById('t-time').innerText = "الوقت: " + job.appointment_time;
+            document.getElementById('t-date').innerText = "التاريخ: " + (job.appointment_date || '');
+            document.getElementById('t-time').innerText = "الوقت: " + (job.appointment_time || '');
+            document.getElementById('t-patient').innerText = "المريض: " + (job.patient_name || '');
+            document.getElementById('t-phone').innerText = "الهاتف: " + (job.patient_phone || '');
         }
 
         async function markComplete(jobId) {

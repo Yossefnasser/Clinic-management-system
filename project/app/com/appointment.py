@@ -89,6 +89,11 @@ def today_appointments(request):
     if selected_specialization_id:
         schedules = schedules.filter(doctor__specialization_id=selected_specialization_id)
 
+    doctors = Doctor.objects.filter(deleted_date__isnull=True)
+    for doctor in doctors:
+        apply_doctor_branch_pricing(doctor, request.user.branch)
+    clinics = Clinic.objects.filter(branch=request.user.branch, deleted_date__isnull=True)
+
     now_time = local_now.time()
     now_minutes = now_time.hour * 60 + now_time.minute
     is_current_day = today == local_now.date()
@@ -210,6 +215,8 @@ def today_appointments(request):
         "today": today,
         "selected_date": selected_date_str or today.strftime("%Y-%m-%d"),
         "schedule_slots": schedule_slots,
+        "doctors": doctors,
+        "clinics": clinics,
         "selected_doctor_id": selected_doctor_id,
         "selected_clinic_id": selected_clinic_id,
         "selected_start": selected_start,
@@ -223,6 +230,121 @@ def today_appointments(request):
         "schedule_patients_count": schedule_patients_count,
     }
     return render(request, "appointment/today.html", context)
+
+
+@login_required
+@require_POST
+def update_today_appointment(request):
+    appointment_id = request.POST.get("id")
+    return_date = request.POST.get("return_date") or get_local_now().date().strftime("%Y-%m-%d")
+
+    appointment = Appointment.objects.filter(
+        branch=request.user.branch,
+        id=appointment_id,
+        deleted_date__isnull=True,
+    ).first()
+    if not appointment:
+        messages.error(request, "الموعد غير موجود")
+        return redirect(f"/appointments/today?date={return_date}")
+
+    patient_name = request.POST.get("patient_name", "").strip()
+    patient_phone = request.POST.get("patient_phone", "").strip()
+    patient_id = request.POST.get("patient_id")
+    doctor_id = request.POST.get("doctor")
+    clinic_id = request.POST.get("clinic")
+    status_name = request.POST.get("status", "OPEN")
+    service_type = request.POST.get("service_type", "consultation")
+    service_price = request.POST.get("service_price", "0")
+    notes = request.POST.get("notes", "")
+    date_str = request.POST.get("date")
+    time_str = request.POST.get("time")
+
+    if not patient_name or not patient_phone:
+        messages.error(request, "اسم المريض ورقم الهاتف مطلوبان")
+        return redirect(f"/appointments/today?date={return_date}")
+
+    try:
+        date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        time = datetime.strptime(time_str, "%H:%M").time()
+    except (ValueError, TypeError):
+        messages.error(request, "صيغة التاريخ أو الوقت غير صحيحة")
+        return redirect(f"/appointments/today?date={return_date}")
+
+    patient = None
+    if patient_id:
+        patient = Patient.objects.filter(branch=request.user.branch, id=patient_id).first()
+    if not patient and patient_phone:
+        patient = Patient.objects.filter(branch=request.user.branch, phone_number=patient_phone).first()
+    if patient:
+        patient.name = patient_name
+        patient.phone_number = patient_phone
+        patient.updated_by = request.user
+        patient.updated_date = get_local_now()
+        patient.save()
+    else:
+        patient = Patient.objects.create(
+            name=patient_name,
+            phone_number=patient_phone,
+            branch=request.user.branch,
+            added_by=request.user,
+            added_date=get_local_now(),
+            updated_by=request.user,
+            updated_date=get_local_now(),
+        )
+
+    doctor = Doctor.objects.filter(id=doctor_id, deleted_date__isnull=True).first()
+    clinic = Clinic.objects.filter(branch=request.user.branch, id=clinic_id, deleted_date__isnull=True).first()
+    status_obj, _ = Status.objects.get_or_create(name=status_name)
+
+    try:
+        service_price_value = float(service_price)
+    except ValueError:
+        service_price_value = 0
+
+    if not doctor or not clinic:
+        messages.error(request, "بيانات الطبيب أو العيادة غير صحيحة")
+        return redirect(f"/appointments/today?date={return_date}")
+
+    appointment.patient = patient
+    appointment.doctor = doctor
+    appointment.clinic = clinic
+    appointment.status = status_obj
+    appointment.service_type = service_type
+    appointment.service_price = service_price_value
+    appointment.date = date
+    appointment.time = time
+    appointment.notes = notes
+    appointment.updated_by = request.user
+    appointment.updated_date = get_local_now()
+    appointment.save()
+
+    messages.success(request, "تم تعديل الموعد بنجاح")
+    return redirect(f"/appointments/today?date={return_date}")
+
+
+@login_required
+@require_POST
+def delete_today_appointment(request):
+    appointment_id = request.POST.get("id")
+    return_date = request.POST.get("return_date") or get_local_now().date().strftime("%Y-%m-%d")
+
+    appointment = Appointment.objects.filter(
+        branch=request.user.branch,
+        id=appointment_id,
+        deleted_date__isnull=True,
+    ).first()
+    if not appointment:
+        messages.error(request, "الموعد غير موجود")
+        return redirect(f"/appointments/today?date={return_date}")
+
+    appointment.deleted_date = get_local_now()
+    appointment.deleted_by = request.user
+    appointment.updated_by = request.user
+    appointment.updated_date = get_local_now()
+    appointment.save(update_fields=["deleted_date", "deleted_by", "updated_by", "updated_date"])
+
+    messages.success(request, "تم حذف الحجز بنجاح")
+    return redirect(f"/appointments/today?date={return_date}")
 
 @login_required
 @require_POST

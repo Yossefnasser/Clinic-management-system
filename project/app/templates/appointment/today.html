@@ -305,11 +305,33 @@
                                         <form method="post" action="{% url 'appointments-check-in' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="id" value="{{ appointment.id }}">
-                                                <input type="hidden" name="id" value="{{ appointment.id }}">
                                             <button type="submit" class="btn btn-sm btn-success">تسجيل حضور</button>
                                         </form>
                                     {% endif %}
-                                    <a class="btn btn-sm btn-outline-secondary" href="/add-appointment?type=edit&id={{ appointment.id }}&next=/appointments/today">تعديل</a>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-outline-secondary edit-appointment-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editAppointmentModal"
+                                        data-id="{{ appointment.id }}"
+                                        data-patient-id="{{ appointment.patient.id }}"
+                                        data-patient-name="{{ appointment.patient.name }}"
+                                        data-patient-phone="{{ appointment.patient.phone_number }}"
+                                        data-doctor-id="{{ appointment.doctor.id }}"
+                                        data-clinic-id="{{ appointment.clinic.id }}"
+                                        data-status="{{ appointment.status.name }}"
+                                        data-service-type="{{ appointment.service_type }}"
+                                        data-service-price="{{ appointment.service_price }}"
+                                        data-date="{{ appointment.date|date:'Y-m-d' }}"
+                                        data-time="{{ appointment.time|time:'H:i' }}"
+                                        data-notes="{{ appointment.notes|default_if_none:''|escapejs }}"
+                                    >تعديل</button>
+                                    <form method="post" action="{% url 'appointments-delete-today' %}" onsubmit="return confirm('حذف هذا الحجز؟');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="id" value="{{ appointment.id }}">
+                                        <input type="hidden" name="return_date" value="{{ selected_date }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">حذف</button>
+                                    </form>
                                     <form method="post" action="{% url 'appointments-reprint-ticket' %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="id" value="{{ appointment.id }}">
@@ -357,6 +379,92 @@
                 <div class="fw-semibold">إجمالي إيراد اليوم</div>
                 <div class="h5 mb-0">{{ day_total_revenue }} ج</div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editAppointmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="post" action="{% url 'appointments-update-today' %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">تعديل الحجز</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="editAppointmentId">
+                    <input type="hidden" name="patient_id" id="editPatientId">
+                    <input type="hidden" name="return_date" value="{{ selected_date }}">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">اسم المريض</label>
+                            <input type="text" class="form-control" name="patient_name" id="editPatientName" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">رقم الهاتف</label>
+                            <input type="text" class="form-control" name="patient_phone" id="editPatientPhone" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">الطبيب</label>
+                            <select class="form-select" name="doctor" id="editDoctor" required>
+                                {% for doctor in doctors %}
+                                    <option value="{{ doctor.id }}" data-consultation="{{ doctor.consultation_price }}" data-examination="{{ doctor.examination_price }}">{{ doctor.full_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">العيادة</label>
+                            <select class="form-select" name="clinic" id="editClinic" required>
+                                {% for clinic in clinics %}
+                                    <option value="{{ clinic.id }}">{{ clinic.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">التاريخ</label>
+                            <input type="date" class="form-control" name="date" id="editDate" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">الوقت</label>
+                            <input type="time" class="form-control" name="time" id="editTime" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">الحالة</label>
+                            <select class="form-select" name="status" id="editStatus">
+                                <option value="OPEN">محجوز</option>
+                                <option value="ARRIVED">تم الحضور</option>
+                                <option value="COMPLETED">مكتمل</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">نوع الخدمة</label>
+                            <select class="form-select" name="service_type" id="editServiceType">
+                                <option value="consultation">استشارة</option>
+                                <option value="examination">كشف</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">السعر</label>
+                            <input type="number" step="0.01" class="form-control" name="service_price" id="editServicePrice">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label">ملاحظات</label>
+                            <textarea class="form-control" name="notes" id="editNotes" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التعديل</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -473,5 +581,35 @@
     });
 
     document.getElementById('quickServiceType').addEventListener('change', updateQuickPrice);
+
+    function updateEditPrice() {
+        const doctorSelect = document.getElementById('editDoctor');
+        const serviceType = document.getElementById('editServiceType').value;
+        const selectedOption = doctorSelect.options[doctorSelect.selectedIndex];
+        if (!selectedOption) return;
+        const consultation = selectedOption.dataset.consultation || '';
+        const examination = selectedOption.dataset.examination || '';
+        document.getElementById('editServicePrice').value = serviceType === 'examination' ? examination : consultation;
+    }
+
+    document.querySelectorAll('.edit-appointment-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('editAppointmentId').value = btn.dataset.id;
+            document.getElementById('editPatientId').value = btn.dataset.patientId || '';
+            document.getElementById('editPatientName').value = btn.dataset.patientName || '';
+            document.getElementById('editPatientPhone').value = btn.dataset.patientPhone || '';
+            document.getElementById('editDoctor').value = btn.dataset.doctorId || '';
+            document.getElementById('editClinic').value = btn.dataset.clinicId || '';
+            document.getElementById('editStatus').value = btn.dataset.status || 'OPEN';
+            document.getElementById('editServiceType').value = btn.dataset.serviceType || 'consultation';
+            document.getElementById('editDate').value = btn.dataset.date || '';
+            document.getElementById('editTime').value = btn.dataset.time || '';
+            document.getElementById('editNotes').value = btn.dataset.notes || '';
+            updateEditPrice();
+        });
+    });
+
+    document.getElementById('editDoctor').addEventListener('change', updateEditPrice);
+    document.getElementById('editServiceType').addEventListener('change', updateEditPrice);
 </script>
 {% endblock %}

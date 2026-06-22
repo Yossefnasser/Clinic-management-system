@@ -45,6 +45,8 @@ urlpatterns = [
     path('appointments/today', appointment.today_appointments, name='appointments-today'),
     path('appointments/check-in', appointment.check_in_appointment, name='appointments-check-in'),
     path('appointments/reprint-ticket', appointment.reprint_ticket, name='appointments-reprint-ticket'),
+    path('appointments/update-today', appointment.update_today_appointment, name='appointments-update-today'),
+    path('appointments/delete-today', appointment.delete_today_appointment, name='appointments-delete-today'),
     path('appointments/quick-create', appointment.quick_create_appointment, name='appointments-quick-create'),
     path('api-/new-appointment', appointment.new_appointment_api, name='api_new_appointment'),
     path('api/clinics/<int:clinic_id>/time-slots/', appointment.get_clinic_time_slots, name='get_clinic_time_slots'),
@@ -55,5 +57,5 @@ urlpatterns = [
     
     path('print-display/', printing.print_display, name='print_display'),
     path('print-jobs/pending/', printing.print_jobs_pending, name='print_jobs_pending'),
-    path('print-jobs/<int:job_id>/complete/', printing.print_job_complete, name='print_job_complete'),
+    path('print-jobs/<int:job_id>/complete/', printing.mark_print_job_done, name='print_job_complete'),
 ]
