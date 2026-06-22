@@ -228,7 +228,6 @@ def today_appointments(request):
 @require_POST
 def check_in_appointment(request):
     appointment_id = request.POST.get("id")
-    ticket_number = request.POST.get("ticket_number")
     if not appointment_id:
         messages.error(request, "رقم الموعد غير صالح")
         return redirect("appointments-today")
@@ -247,12 +246,29 @@ def check_in_appointment(request):
     appointment.status = arrived_status
     appointment.updated_by = request.user
     appointment.updated_date = get_local_now()
+    # Assign per-doctor-per-day ticket number if not already assigned
+    from django.db import transaction
+    if appointment.ticket_number is None:
+        with transaction.atomic():
+            # lock relevant rows to avoid race
+            _ = Appointment.objects.select_for_update().filter(
+                branch=appointment.branch,
+                date=appointment.date,
+                doctor=appointment.doctor,
+            )
+            existing_count = Appointment.objects.filter(
+                branch=appointment.branch,
+                date=appointment.date,
+                doctor=appointment.doctor,
+                ticket_number__isnull=False,
+            ).count()
+            appointment.ticket_number = existing_count + 1
     appointment.save()
 
     # Queue a print job instead of printing directly
     PrintJob.objects.create(
         appointment=appointment,
-        ticket_number=ticket_number or appointment.id,
+        status=PrintJob.Status.PENDING,
     )
 
     messages.success(request, "تم تسجيل حضور المريض")
@@ -263,7 +279,7 @@ def check_in_appointment(request):
 @require_POST
 def reprint_ticket(request):
     appointment_id = request.POST.get("id")
-    ticket_number = request.POST.get("ticket_number")
+    # ticket number is computed/stored server-side
 
     if not appointment_id:
         messages.error(request, "رقم الموعد غير صالح")
@@ -279,9 +295,27 @@ def reprint_ticket(request):
         messages.error(request, "الموعد غير موجود")
         return redirect("appointments-today")
 
+    # Ensure ticket number exists for consistent printing
+    from django.db import transaction
+    if appointment.ticket_number is None:
+        with transaction.atomic():
+            _ = Appointment.objects.select_for_update().filter(
+                branch=appointment.branch,
+                date=appointment.date,
+                doctor=appointment.doctor,
+            )
+            existing_count = Appointment.objects.filter(
+                branch=appointment.branch,
+                date=appointment.date,
+                doctor=appointment.doctor,
+                ticket_number__isnull=False,
+            ).count()
+            appointment.ticket_number = existing_count + 1
+            appointment.save()
+
     PrintJob.objects.create(
         appointment=appointment,
-        ticket_number=ticket_number or appointment.id,
+        status=PrintJob.Status.PENDING,
     )
     messages.success(request, "تمت إضافة التذكرة لقائمة الطباعة")
 

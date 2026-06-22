@@ -238,6 +238,7 @@ class Appointment(BaseModel):
     time     = models.TimeField()
     notes    = models.TextField(blank=True, null=True)
     branch   = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)
+    ticket_number = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ['date', 'time']

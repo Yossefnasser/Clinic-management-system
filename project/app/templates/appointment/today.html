@@ -305,7 +305,7 @@
                                         <form method="post" action="{% url 'appointments-check-in' %}">
                                             {% csrf_token %}
                                             <input type="hidden" name="id" value="{{ appointment.id }}">
-                                            <input type="hidden" name="ticket_number" value="{{ forloop.counter }}">
+                                                <input type="hidden" name="id" value="{{ appointment.id }}">
                                             <button type="submit" class="btn btn-sm btn-success">تسجيل حضور</button>
                                         </form>
                                     {% endif %}
@@ -313,7 +313,6 @@
                                     <form method="post" action="{% url 'appointments-reprint-ticket' %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="id" value="{{ appointment.id }}">
-                                        <input type="hidden" name="ticket_number" value="{{ forloop.counter }}">
                                         <button type="submit" class="btn btn-sm btn-outline-primary">إعادة طباعة</button>
                                     </form>
                                 </div>

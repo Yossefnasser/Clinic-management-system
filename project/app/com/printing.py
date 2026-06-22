@@ -25,12 +25,4 @@ def print_jobs_pending(request):
             "display_number": job.id,
             "clinic_name": appointment.clinic.name,
             "doctor_name": appointment.doctor.full_name,
-            "appointment_time": appointment.time.strftime("%I:%M %p"),
-        }
-    })
-
-
-@require_POST
-def print_job_complete(request, job_id):
-    PrintJob.objects.filter(id=job_id).update(status='done')
-    return JsonResponse({"ok": True})
+            "appointment_time
